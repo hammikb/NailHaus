@@ -97,6 +97,7 @@ export function mapProduct(p: Record<string, unknown>, vendor?: Record<string, u
     collectionId: p.collection_id || null,
     nailCount: p.nail_count || null,
     imageUrl: p.image_url || null,
+    images: (p.images as string[] | null) || [],
     sizes: p.sizes || '',
     sizeInventory: (p.size_inventory as Record<string, number> | null) || {},
     finish: p.finish || '',

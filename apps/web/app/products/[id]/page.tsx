@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { AddToCartSection } from '@/components/AddToCartSection';
 import { ReviewForm } from '@/components/ReviewForm';
 import { WishlistButton } from '@/components/WishlistButton';
+import { ProductGallery } from '@/components/ProductGallery';
 import { mapProduct, mapReview, supabaseAdmin } from '@/lib/route-helpers';
 import type { Product, Review, VendorSummary } from '@/lib/types';
 
@@ -107,28 +108,14 @@ export default async function ProductDetailPage({
         </div>
 
         <div className="detail-grid">
-          <div
-            className="panel detail-media"
-            style={{
-              background: product.bgColor || '#fde8e8',
-              fontSize: '7rem',
-            }}
-          >
-            {product.badge && (
-              <span
-                className={`badge badge-${product.badge}`}
-                style={{
-                  position: 'absolute',
-                  top: 18,
-                  left: 18,
-                  fontSize: '.8rem',
-                }}
-              >
-                {product.badge.toUpperCase()}
-              </span>
-            )}
-            {product.emoji || '💅'}
-          </div>
+          <ProductGallery
+            primaryImage={product.imageUrl || null}
+            images={product.images || []}
+            emoji={product.emoji}
+            bgColor={product.bgColor}
+            badge={product.badge}
+            name={product.name}
+          />
 
           <div className="panel" style={{ padding: 32 }}>
             {product.vendor && (

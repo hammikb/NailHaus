@@ -65,6 +65,7 @@ export interface Product {
   emoji: string;
   bgColor: string;
   imageUrl?: string | null;
+  images?: string[];
   shape: string;
   style: string;
   badge?: string | null;

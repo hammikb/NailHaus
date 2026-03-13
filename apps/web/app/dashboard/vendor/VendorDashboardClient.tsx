@@ -240,6 +240,8 @@ export function VendorDashboardClient() {
   const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageUploadError, setImageUploadError] = useState('');
+  const [productImages, setProductImages] = useState<string[]>([]);
+  const [imageActionLoading, setImageActionLoading] = useState<string | null>(null); // url being acted on
 
   // Import
   const [importMode, setImportMode] = useState<ImportMode>('json');
@@ -292,9 +294,9 @@ export function VendorDashboardClient() {
   useEffect(() => { if (tab === 'payouts') loadPayouts(); }, [tab, loadPayouts]);
 
   /* Product CRUD */
-  function startAdd() { setEditingId(null); setForm(emptyForm()); setFormError(''); setCurrentImageUrl(null); setImageUploadError(''); setShowForm(true); }
-  function startEdit(p: Product) { setEditingId(p.id); setForm(productToForm(p)); setFormError(''); setCurrentImageUrl(p.imageUrl || null); setImageUploadError(''); setShowForm(true); }
-  function cancelForm() { setShowForm(false); setEditingId(null); setFormError(''); setCurrentImageUrl(null); setImageUploadError(''); }
+  function startAdd() { setEditingId(null); setForm(emptyForm()); setFormError(''); setCurrentImageUrl(null); setProductImages([]); setImageUploadError(''); setShowForm(true); }
+  function startEdit(p: Product) { setEditingId(p.id); setForm(productToForm(p)); setFormError(''); setCurrentImageUrl(p.imageUrl || null); setProductImages((p as Product & { images?: string[] }).images || []); setImageUploadError(''); setShowForm(true); }
+  function cancelForm() { setShowForm(false); setEditingId(null); setFormError(''); setCurrentImageUrl(null); setProductImages([]); setImageUploadError(''); }
   function setField(k: string, v: string) {
     setForm(f => {
       if (k === 'sizes') {
@@ -338,13 +340,14 @@ export function VendorDashboardClient() {
     } finally { setFormSaving(false); }
   }
 
-  async function uploadImage(file: File) {
+  async function uploadImage(file: File, setPrimary = false) {
     if (!editingId) return;
     setImageUploading(true); setImageUploadError('');
     try {
       const token = localStorage.getItem('nh_tok');
       const fd = new FormData();
       fd.append('file', file);
+      if (setPrimary) fd.append('primary', 'true');
       const res = await fetch(`/api/products/${editingId}/image`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -352,11 +355,50 @@ export function VendorDashboardClient() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Upload failed');
-      setCurrentImageUrl(json.imageUrl);
-      setProducts(ps => ps.map(p => p.id === editingId ? { ...p, imageUrl: json.imageUrl } : p));
+      if (json.images) {
+        setProductImages(json.images);
+      }
+      if (setPrimary || productImages.length === 0) {
+        setCurrentImageUrl(json.imageUrl);
+        setProducts(ps => ps.map(p => p.id === editingId ? { ...p, imageUrl: json.imageUrl } : p));
+      }
     } catch (err: unknown) {
       setImageUploadError(err instanceof Error ? err.message : 'Upload failed');
     } finally { setImageUploading(false); }
+  }
+
+  async function setPrimaryImage(url: string) {
+    if (!editingId) return;
+    setImageActionLoading(url);
+    try {
+      const token = localStorage.getItem('nh_tok');
+      const res = await fetch(`/api/products/${editingId}/images/primary`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      setCurrentImageUrl(url);
+      setProducts(ps => ps.map(p => p.id === editingId ? { ...p, imageUrl: url } : p));
+    } catch { /* ignore */ } finally { setImageActionLoading(null); }
+  }
+
+  async function deleteImage(url: string) {
+    if (!editingId) return;
+    setImageActionLoading(url);
+    try {
+      const token = localStorage.getItem('nh_tok');
+      const res = await fetch(`/api/products/${editingId}/images/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ url }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error('Failed');
+      setProductImages(json.images || []);
+      setCurrentImageUrl(json.imageUrl || null);
+      setProducts(ps => ps.map(p => p.id === editingId ? { ...p, imageUrl: json.imageUrl || null } : p));
+    } catch { /* ignore */ } finally { setImageActionLoading(null); }
   }
 
   async function deleteProduct(id: string) {
@@ -745,42 +787,87 @@ export function VendorDashboardClient() {
                 </Field>
               </div>
 
-              {/* Photo upload — only available once product has been saved (has an ID) */}
-              {editingId && (
+              {/* Photos — only available once product has been saved (has an ID) */}
+              {editingId ? (
                 <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1.5px solid var(--border)' }}>
-                  <label style={FL}>Product photo</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                    {currentImageUrl ? (
-                      <div style={{ position: 'relative', width: 80, height: 80, borderRadius: 12, overflow: 'hidden', border: '1.5px solid var(--border)', flexShrink: 0 }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={currentImageUrl} alt="Product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </div>
-                    ) : (
-                      <div style={{ width: 80, height: 80, borderRadius: 12, border: '1.5px dashed var(--border)', display: 'grid', placeItems: 'center', fontSize: '1.8rem', flexShrink: 0, color: 'var(--muted)' }}>
-                        📷
-                      </div>
-                    )}
-                    <div>
-                      <label style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 18px', borderRadius: 999, border: '1.5px solid var(--border)', fontSize: '.85rem', fontWeight: 700, background: '#fafafa', opacity: imageUploading ? 0.6 : 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <label style={FL}>Product photos ({productImages.length}/10)</label>
+                    {productImages.length < 10 && (
+                      <label style={{ cursor: 'pointer' }}>
+                        <span style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--accent)', cursor: 'pointer', opacity: imageUploading ? 0.5 : 1 }}>
+                          {imageUploading ? '⏳ Uploading...' : '+ Add photo'}
+                        </span>
                         <input
                           type="file"
                           accept="image/jpeg,image/png,image/webp,image/gif"
                           style={{ display: 'none' }}
                           disabled={imageUploading}
-                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f); e.target.value = ''; }}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f, productImages.length === 0); e.target.value = ''; }}
                         />
-                        {imageUploading ? '⏳ Uploading...' : currentImageUrl ? '🔄 Replace photo' : '📤 Upload photo'}
                       </label>
-                      <div className="muted" style={{ fontSize: '.74rem', marginTop: 6 }}>JPG, PNG, WebP or GIF · max 5 MB</div>
-                      {imageUploadError && <div className="error" style={{ fontSize: '.82rem', marginTop: 6 }}>{imageUploadError}</div>}
-                    </div>
+                    )}
                   </div>
-                </div>
-              )}
 
-              {!editingId && (
+                  {productImages.length === 0 ? (
+                    <div style={{ border: '1.5px dashed var(--border)', borderRadius: 12, padding: '24px 16px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '2rem', marginBottom: 8 }}>📷</div>
+                      <div className="muted" style={{ fontSize: '.85rem', marginBottom: 12 }}>No photos yet</div>
+                      <label style={{ cursor: 'pointer' }}>
+                        <span className="pill btn-ghost btn-sm" style={{ pointerEvents: 'none' }}>
+                          {imageUploading ? '⏳ Uploading...' : '📤 Upload first photo'}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          style={{ display: 'none' }}
+                          disabled={imageUploading}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f, true); e.target.value = ''; }}
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 10 }}>
+                      {productImages.map((url, i) => {
+                        const isPrimary = url.split('?')[0] === (currentImageUrl || '').split('?')[0] || (i === 0 && !currentImageUrl);
+                        const isActing = imageActionLoading === url;
+                        return (
+                          <div key={i} style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: isPrimary ? '2.5px solid var(--accent)' : '1.5px solid var(--border)', aspectRatio: '1', background: form.bgColor }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt={`Photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                            {isPrimary && (
+                              <div style={{ position: 'absolute', top: 4, left: 4, background: 'var(--accent)', color: '#fff', fontSize: '.65rem', fontWeight: 800, padding: '2px 6px', borderRadius: 6, letterSpacing: '.04em' }}>MAIN</div>
+                            )}
+                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,.55)', display: 'flex', gap: 4, padding: '4px 5px' }}>
+                              {!isPrimary && (
+                                <button
+                                  type="button"
+                                  disabled={isActing}
+                                  onClick={() => setPrimaryImage(url)}
+                                  style={{ flex: 1, background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', fontSize: '.65rem', fontWeight: 700, borderRadius: 4, padding: '3px 0', cursor: 'pointer' }}
+                                >
+                                  {isActing ? '…' : 'Set main'}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                disabled={isActing}
+                                onClick={() => deleteImage(url)}
+                                style={{ background: 'rgba(220,38,38,.7)', border: 'none', color: '#fff', fontSize: '.65rem', fontWeight: 700, borderRadius: 4, padding: '3px 6px', cursor: 'pointer' }}
+                              >
+                                {isActing ? '…' : '×'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="muted" style={{ fontSize: '.74rem', marginTop: 8 }}>JPG, PNG, WebP or GIF · max 5 MB · Up to 10 photos</div>
+                  {imageUploadError && <div className="error" style={{ fontSize: '.82rem', marginTop: 6 }}>{imageUploadError}</div>}
+                </div>
+              ) : (
                 <div className="muted" style={{ fontSize: '.78rem', marginTop: 16 }}>
-                  Save the product first, then you can upload a photo.
+                  Save the product first, then you can upload photos.
                 </div>
               )}
 

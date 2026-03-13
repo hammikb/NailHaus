@@ -7,8 +7,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
 
-  // Verify ownership
-  const { data: product } = await supabaseAdmin.from('products').select('vendor_id').eq('id', id).single();
+  const { data: product } = await supabaseAdmin.from('products').select('vendor_id, image_url, images').eq('id', id).single();
   if (!product) return err('Not found', 404);
 
   const { data: vendor } = await supabaseAdmin.from('vendors').select('id').eq('user_id', user.id).single();
@@ -23,26 +22,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!allowed.includes(ext)) return err('Only JPG, PNG, WebP and GIF are allowed');
   if (file.size > 5 * 1024 * 1024) return err('Image must be under 5 MB');
 
-  const path = `products/${id}.${ext}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const setPrimary = formData.get('primary') === 'true';
+  const existingImages: string[] = Array.isArray(product.images) ? product.images : [];
+  const isFirst = existingImages.length === 0 && !product.image_url;
 
-  // Delete any existing files for this product (handles extension changes + clears CDN cache)
-  const { data: existing } = await supabaseAdmin.storage.from('product-images').list('products', { search: id });
-  if (existing?.length) {
-    await supabaseAdmin.storage.from('product-images').remove(existing.map(f => `products/${f.name}`));
-  }
+  const path = `products/${id}/${Date.now()}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error: uploadError } = await supabaseAdmin.storage
     .from('product-images')
-    .upload(path, buffer, { contentType: file.type, upsert: true });
+    .upload(path, buffer, { contentType: file.type, upsert: false });
 
   if (uploadError) return err(uploadError.message, 500);
 
   const { data: urlData } = supabaseAdmin.storage.from('product-images').getPublicUrl(path);
-  // Append cache-buster so browsers/CDN always serve the latest version
-  const imageUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+  const newUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
-  await supabaseAdmin.from('products').update({ image_url: imageUrl }).eq('id', id);
+  const updatedImages = [...existingImages, newUrl];
+  const updates: Record<string, unknown> = { images: updatedImages };
 
-  return NextResponse.json({ imageUrl });
+  if (setPrimary || isFirst) {
+    updates.image_url = newUrl;
+  }
+
+  await supabaseAdmin.from('products').update(updates).eq('id', id);
+
+  const imageUrl = (setPrimary || isFirst) ? newUrl : (product.image_url || newUrl);
+  return NextResponse.json({ imageUrl, images: updatedImages });
 }
