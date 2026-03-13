@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { AddToCartSection } from '@/components/AddToCartSection';
+import { ReviewForm } from '@/components/ReviewForm';
+import { WishlistButton } from '@/components/WishlistButton';
 import { mapProduct, mapReview, supabaseAdmin } from '@/lib/route-helpers';
 import type { Product, Review, VendorSummary } from '@/lib/types';
 
@@ -334,6 +336,7 @@ export default async function ProductDetailPage({
                 availability: product.availability,
               }}
             />
+            <WishlistButton productId={product.id} style={{ marginTop: 10 }} />
           </div>
         </div>
 
@@ -367,6 +370,8 @@ export default async function ProductDetailPage({
             </div>
           </div>
         </div>
+
+        <ReviewForm productId={product.id} />
 
         {!!product.reviews?.length && (
           <section className="section">

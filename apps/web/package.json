@@ -13,7 +13,9 @@
     "@vercel/analytics": "^2.0.1",
     "next": "^16.1.6",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "resend": "^6.9.3",
+    "stripe": "^20.4.1"
   },
   "devDependencies": {
     "@types/node": "22.13.10",

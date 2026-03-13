@@ -25,36 +25,14 @@ export default function CartPage() {
     setPlacing(true);
     setError('');
     try {
-      await api.checkout(items.map((item) => ({ productId: item.productId, qty: item.qty, size: item.size })));
-      clear();
-      setSuccess('Order placed successfully!');
+      const { url } = await api.createStripeSession(
+        items.map((item) => ({ productId: item.productId, qty: item.qty, size: item.size }))
+      );
+      if (url) window.location.href = url;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Checkout failed. Please try again.');
-    } finally {
       setPlacing(false);
     }
-  }
-
-  if (success) {
-    return (
-      <main className="page-shell">
-        <div className="container" style={{ maxWidth: 560 }}>
-          <div className="panel" style={{ padding: 48, textAlign: 'center' }}>
-            <div style={{ fontSize: '3rem', marginBottom: 16 }}>🎉</div>
-            <h1 className="section-title" style={{ marginBottom: 10 }}>
-              Order <em>confirmed!</em>
-            </h1>
-            <p className="subtle" style={{ lineHeight: 1.7, marginBottom: 24 }}>
-              Your order has been placed. You&apos;ll receive updates from your vendors soon.
-            </p>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <Link href="/orders" className="pill btn-primary">View my orders</Link>
-              <Link href="/shop" className="pill btn-ghost">Continue shopping</Link>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
   }
 
   return (

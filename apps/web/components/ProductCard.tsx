@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Product } from '@/lib/types';
 
 function Stars({ rating }: { rating: number }) {
@@ -13,13 +14,23 @@ export function ProductCard({ product }: { product: Product }) {
 
   return (
     <Link href={`/products/${product.id}`} className="card product-card">
-      <div className="product-thumb" style={{ background: product.bgColor }}>
+      <div className="product-thumb" style={{ background: product.bgColor, position: 'relative', overflow: 'hidden' }}>
         {product.badge ? (
           <span className={`badge badge-${product.badge}`}>{product.badge.toUpperCase()}</span>
         ) : isOutOfStock ? (
           <span className="badge" style={{ background: 'rgba(0,0,0,.48)', color: 'white', borderColor: 'transparent' }}>Sold out</span>
         ) : null}
-        <span className="emoji-wrap" style={{ fontSize: '3.6rem', lineHeight: 1 }}>{product.emoji}</span>
+        {product.imageUrl ? (
+          <Image
+            src={product.imageUrl}
+            alt={product.name}
+            fill
+            sizes="(max-width: 640px) 100vw, 260px"
+            style={{ objectFit: 'cover' }}
+          />
+        ) : (
+          <span className="emoji-wrap" style={{ fontSize: '3.6rem', lineHeight: 1 }}>{product.emoji}</span>
+        )}
       </div>
 
       <div className="card-body">

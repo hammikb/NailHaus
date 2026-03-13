@@ -111,12 +111,29 @@ export const api = {
   updateVendorProfile(data: Record<string, unknown>) {
     return request<VendorDetail>('/vendors/me', { method: 'PUT', body: JSON.stringify(data) });
   },
+  // Reviews
+  submitReview(data: { productId: string; rating: number; title?: string; body: string }) {
+    return request<{ id: string }>('/reviews', { method: 'POST', body: JSON.stringify(data) });
+  },
+  // Wishlist
+  getWishlist() {
+    return request<{ productId: string }[]>('/wishlist');
+  },
+  addToWishlist(productId: string) {
+    return request<{ productId: string }>('/wishlist', { method: 'POST', body: JSON.stringify({ productId }) });
+  },
+  removeFromWishlist(productId: string) {
+    return request<{ success: boolean }>(`/wishlist/${productId}`, { method: 'DELETE' });
+  },
   // Orders
   getMyOrders() {
     return request<Order[]>('/orders/my');
   },
   checkout(items: { productId: string; qty: number; size?: string }[], shippingAddress: Record<string, string> = {}) {
     return request<Order>('/orders', { method: 'POST', body: JSON.stringify({ items, shippingAddress }) });
+  },
+  createStripeSession(items: { productId: string; qty: number; size?: string }[]) {
+    return request<{ url: string }>('/checkout/stripe', { method: 'POST', body: JSON.stringify({ items }) });
   },
   // Admin
   getAdminStats() {

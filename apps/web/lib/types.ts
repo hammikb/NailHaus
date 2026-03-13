@@ -63,6 +63,7 @@ export interface Product {
   originalPrice?: number | null;
   emoji: string;
   bgColor: string;
+  imageUrl?: string | null;
   shape: string;
   style: string;
   badge?: string | null;

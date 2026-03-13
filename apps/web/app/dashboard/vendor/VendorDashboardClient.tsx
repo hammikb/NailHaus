@@ -237,6 +237,9 @@ export function VendorDashboardClient() {
   const [formSaving, setFormSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
+  const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState('');
 
   // Import
   const [importMode, setImportMode] = useState<ImportMode>('json');
@@ -285,9 +288,9 @@ export function VendorDashboardClient() {
   useEffect(() => { if (tab === 'payouts') loadPayouts(); }, [tab, loadPayouts]);
 
   /* Product CRUD */
-  function startAdd() { setEditingId(null); setForm(emptyForm()); setFormError(''); setShowForm(true); }
-  function startEdit(p: Product) { setEditingId(p.id); setForm(productToForm(p)); setFormError(''); setShowForm(true); }
-  function cancelForm() { setShowForm(false); setEditingId(null); setFormError(''); }
+  function startAdd() { setEditingId(null); setForm(emptyForm()); setFormError(''); setCurrentImageUrl(null); setImageUploadError(''); setShowForm(true); }
+  function startEdit(p: Product) { setEditingId(p.id); setForm(productToForm(p)); setFormError(''); setCurrentImageUrl(p.imageUrl || null); setImageUploadError(''); setShowForm(true); }
+  function cancelForm() { setShowForm(false); setEditingId(null); setFormError(''); setCurrentImageUrl(null); setImageUploadError(''); }
   function setField(k: string, v: string) {
     setForm(f => {
       if (k === 'sizes') {
@@ -317,14 +320,39 @@ export function VendorDashboardClient() {
       if (editingId) {
         const updated = await api.updateProduct(editingId, payload);
         setProducts(ps => ps.map(p => p.id === editingId ? updated : p));
+        cancelForm();
       } else {
         const created = await api.createProduct(payload);
         setProducts(ps => [created, ...ps]);
+        // Switch to edit mode so vendor can upload a photo
+        setEditingId(created.id);
+        setCurrentImageUrl(created.imageUrl || null);
+        setImageUploadError('');
       }
-      cancelForm();
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Save failed');
     } finally { setFormSaving(false); }
+  }
+
+  async function uploadImage(file: File) {
+    if (!editingId) return;
+    setImageUploading(true); setImageUploadError('');
+    try {
+      const token = localStorage.getItem('nh_tok');
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/products/${editingId}/image`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Upload failed');
+      setCurrentImageUrl(json.imageUrl);
+      setProducts(ps => ps.map(p => p.id === editingId ? { ...p, imageUrl: json.imageUrl } : p));
+    } catch (err: unknown) {
+      setImageUploadError(err instanceof Error ? err.message : 'Upload failed');
+    } finally { setImageUploading(false); }
   }
 
   async function deleteProduct(id: string) {
@@ -692,6 +720,46 @@ export function VendorDashboardClient() {
                   </select>
                 </Field>
               </div>
+
+              {/* Photo upload — only available once product has been saved (has an ID) */}
+              {editingId && (
+                <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1.5px solid var(--border)' }}>
+                  <label style={FL}>Product photo</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                    {currentImageUrl ? (
+                      <div style={{ position: 'relative', width: 80, height: 80, borderRadius: 12, overflow: 'hidden', border: '1.5px solid var(--border)', flexShrink: 0 }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={currentImageUrl} alt="Product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                    ) : (
+                      <div style={{ width: 80, height: 80, borderRadius: 12, border: '1.5px dashed var(--border)', display: 'grid', placeItems: 'center', fontSize: '1.8rem', flexShrink: 0, color: 'var(--muted)' }}>
+                        📷
+                      </div>
+                    )}
+                    <div>
+                      <label style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 18px', borderRadius: 999, border: '1.5px solid var(--border)', fontSize: '.85rem', fontWeight: 700, background: '#fafafa', opacity: imageUploading ? 0.6 : 1 }}>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          style={{ display: 'none' }}
+                          disabled={imageUploading}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f); e.target.value = ''; }}
+                        />
+                        {imageUploading ? '⏳ Uploading...' : currentImageUrl ? '🔄 Replace photo' : '📤 Upload photo'}
+                      </label>
+                      <div className="muted" style={{ fontSize: '.74rem', marginTop: 6 }}>JPG, PNG, WebP or GIF · max 5 MB</div>
+                      {imageUploadError && <div className="error" style={{ fontSize: '.82rem', marginTop: 6 }}>{imageUploadError}</div>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!editingId && (
+                <div className="muted" style={{ fontSize: '.78rem', marginTop: 16 }}>
+                  Save the product first, then you can upload a photo.
+                </div>
+              )}
+
               {formError && <div className="error" style={{ marginTop: 12 }}>{formError}</div>}
               <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
                 <button className="pill btn-primary" onClick={saveProduct} disabled={formSaving}>{formSaving ? 'Saving...' : editingId ? 'Save changes' : 'Create product'}</button>
@@ -737,7 +805,12 @@ export function VendorDashboardClient() {
                     <tr key={p.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <span style={{ width: 40, height: 40, borderRadius: 12, background: p.bgColor, display: 'grid', placeItems: 'center', fontSize: '1.3rem', flexShrink: 0 }}>{p.emoji}</span>
+                          <div style={{ width: 40, height: 40, borderRadius: 12, background: p.bgColor, display: 'grid', placeItems: 'center', fontSize: '1.3rem', flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
+                            {p.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.imageUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : p.emoji}
+                          </div>
                           <div>
                             <div style={{ fontWeight: 700, lineHeight: 1.3 }}>{p.name}</div>
                             {p.badge && <span className={`badge-${p.badge}`} style={{ fontSize: '.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>{p.badge}</span>}

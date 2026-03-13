@@ -40,7 +40,10 @@ export function Header() {
 
         <div className="nav-actions">
           {user && (
-            <Link href="/orders" className="pill btn-ghost btn-sm">My Orders</Link>
+            <>
+              <Link href="/orders" className="pill btn-ghost btn-sm">My Orders</Link>
+              <Link href="/wishlist" className="pill btn-ghost btn-sm" aria-label="Wishlist">🤍</Link>
+            </>
           )}
 
           {/* Cart button */}
