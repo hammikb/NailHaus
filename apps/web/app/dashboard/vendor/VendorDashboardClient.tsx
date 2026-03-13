@@ -19,13 +19,55 @@ const CSV_EXAMPLE = '"Cherry Blossom Set","Hand-painted floral spring design",24
 
 /* ─── Helpers ───────────────────────────────────────── */
 
+function parseSizes(value: string) {
+  return value
+    .split(/[,;\n]/)
+    .map((size) => size.trim())
+    .filter(Boolean);
+}
+
+function normalizeSizeInventoryInput(
+  sizes: string[],
+  inventory: Record<string, string> = {}
+) {
+  return sizes.reduce<Record<string, string>>((acc, size) => {
+    acc[size] = inventory[size] ?? '';
+    return acc;
+  }, {});
+}
+
+function toSizeInventoryPayload(inventory: Record<string, string>) {
+  return Object.entries(inventory).reduce<Record<string, number>>(
+    (acc, [size, value]) => {
+      const parsed = parseInt(value, 10);
+      acc[size] = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+      return acc;
+    },
+    {}
+  );
+}
+
+function getEffectiveStock(product: {
+  stock: number;
+  sizes?: string;
+  sizeInventory?: Record<string, number>;
+}) {
+  const sizes = parseSizes(product.sizes || '');
+  if (!sizes.length || !product.sizeInventory) return product.stock;
+  return sizes.reduce(
+    (sum, size) => sum + Math.max(0, Number(product.sizeInventory?.[size] ?? 0)),
+    0
+  );
+}
+
 function emptyForm() {
   return {
     name: '', description: '', price: '', originalPrice: '', stock: '',
     shape: 'almond', style: 'minimal', badge: '', availability: 'in_stock',
     productionDays: '', tags: '', occasions: [] as string[],
     emoji: '💅', bgColor: '#fde8e8',
-    nailCount: '', sizes: '', finish: '', glueIncluded: '', reusable: '', wearTime: '',
+    nailCount: '', sizes: '', sizeInventory: {} as Record<string, string>,
+    finish: '', glueIncluded: '', reusable: '', wearTime: '',
   };
 }
 
@@ -74,16 +116,25 @@ function csvRowToProduct(row: Record<string, string>): Record<string, unknown> {
 }
 
 function formToPayload(f: ReturnType<typeof emptyForm>): Record<string, unknown> {
+  const sizeList = parseSizes(f.sizes);
+  const sizeInventory = toSizeInventoryPayload(
+    normalizeSizeInventoryInput(sizeList, f.sizeInventory)
+  );
+  const hasPerSizeInventory = sizeList.length > 0;
+
   return {
     name: f.name, description: f.description,
     price: parseFloat(f.price) || 0, originalPrice: f.originalPrice ? parseFloat(f.originalPrice) : null,
-    stock: parseInt(f.stock) || 0, shape: f.shape, style: f.style,
+    stock: hasPerSizeInventory
+      ? Object.values(sizeInventory).reduce((sum, count) => sum + count, 0)
+      : parseInt(f.stock) || 0,
+    shape: f.shape, style: f.style,
     badge: f.badge || null, availability: f.availability,
     productionDays: f.productionDays ? parseInt(f.productionDays) : null,
     tags: f.tags.split(',').map(s => s.trim()).filter(Boolean),
     occasions: f.occasions, emoji: f.emoji, bgColor: f.bgColor,
     nailCount: f.nailCount ? parseInt(f.nailCount) : null,
-    sizes: f.sizes, finish: f.finish,
+    sizes: sizeList.join(', '), sizeInventory, finish: f.finish,
     glueIncluded: f.glueIncluded === 'true' ? true : f.glueIncluded === 'false' ? false : null,
     reusable: f.reusable === 'yes' ? true : f.reusable === 'no' ? false : null,
     wearTime: f.wearTime,
@@ -91,6 +142,7 @@ function formToPayload(f: ReturnType<typeof emptyForm>): Record<string, unknown>
 }
 
 function productToForm(p: Product): ReturnType<typeof emptyForm> {
+  const sizeList = parseSizes(p.sizes || '');
   return {
     name: p.name, description: p.description || '',
     price: String(p.price), originalPrice: p.originalPrice ? String(p.originalPrice) : '',
@@ -100,6 +152,12 @@ function productToForm(p: Product): ReturnType<typeof emptyForm> {
     tags: (p.tags || []).join(', '), occasions: p.occasions || [],
     emoji: p.emoji, bgColor: p.bgColor,
     nailCount: p.nailCount ? String(p.nailCount) : '', sizes: p.sizes || '',
+    sizeInventory: normalizeSizeInventoryInput(
+      sizeList,
+      Object.fromEntries(
+        sizeList.map((size) => [size, String(p.sizeInventory?.[size] ?? '')])
+      )
+    ),
     finish: p.finish || '',
     glueIncluded: p.glueIncluded === true ? 'true' : p.glueIncluded === false ? 'false' : '',
     reusable: p.reusable === true ? 'yes' : p.reusable === false ? 'no' : '',
@@ -230,7 +288,26 @@ export function VendorDashboardClient() {
   function startAdd() { setEditingId(null); setForm(emptyForm()); setFormError(''); setShowForm(true); }
   function startEdit(p: Product) { setEditingId(p.id); setForm(productToForm(p)); setFormError(''); setShowForm(true); }
   function cancelForm() { setShowForm(false); setEditingId(null); setFormError(''); }
-  function setField(k: string, v: string) { setForm(f => ({ ...f, [k]: v })); }
+  function setField(k: string, v: string) {
+    setForm(f => {
+      if (k === 'sizes') {
+        const nextSizes = parseSizes(v);
+        return {
+          ...f,
+          sizes: v,
+          sizeInventory: normalizeSizeInventoryInput(nextSizes, f.sizeInventory),
+        };
+      }
+      return { ...f, [k]: v };
+    });
+  }
+  function setSizeInventoryField(size: string, value: string) {
+    if (!/^\d*$/.test(value)) return;
+    setForm(f => ({
+      ...f,
+      sizeInventory: { ...f.sizeInventory, [size]: value },
+    }));
+  }
   function toggleOcc(o: string) { setForm(f => ({ ...f, occasions: f.occasions.includes(o) ? f.occasions.filter(x => x !== o) : [...f.occasions, o] })); }
 
   async function saveProduct() {
@@ -328,8 +405,14 @@ export function VendorDashboardClient() {
   if (!data) return null;
 
   const stats = data.stats;
-  const lowStockProducts = products.filter(p => p.stock > 0 && p.stock <= 3 && p.availability !== 'made_to_order');
-  const outOfStockProducts = products.filter(p => p.stock === 0 && p.availability !== 'made_to_order');
+  const formSizes = parseSizes(form.sizes);
+  const formSizeInventory = normalizeSizeInventoryInput(formSizes, form.sizeInventory);
+  const formTotalStock = Object.values(toSizeInventoryPayload(formSizeInventory)).reduce((sum, count) => sum + count, 0);
+  const lowStockProducts = products.filter(p => {
+    const stock = getEffectiveStock(p);
+    return stock > 0 && stock <= 3 && p.availability !== 'made_to_order';
+  });
+  const outOfStockProducts = products.filter(p => getEffectiveStock(p) === 0 && p.availability !== 'made_to_order');
   const filteredProducts = productSearch
     ? products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()) || (p.tags || []).some(t => t.includes(productSearch.toLowerCase())))
     : products;
@@ -357,7 +440,7 @@ export function VendorDashboardClient() {
           {lowStockProducts.length > 0 && (
             <div className="alert alert-warn">
               <span>⚠️</span>
-              <span><strong>{lowStockProducts.length} product{lowStockProducts.length > 1 ? 's' : ''} running low:</strong> {lowStockProducts.map(p => `${p.name} (${p.stock} left)`).slice(0, 3).join(', ')}</span>
+              <span><strong>{lowStockProducts.length} product{lowStockProducts.length > 1 ? 's' : ''} running low:</strong> {lowStockProducts.map(p => `${p.name} (${getEffectiveStock(p)} left)`).slice(0, 3).join(', ')}</span>
             </div>
           )}
         </div>
@@ -502,7 +585,22 @@ export function VendorDashboardClient() {
                   <input style={FI} type="number" min="0.01" step="0.01" value={form.originalPrice} onChange={e => setField('originalPrice', e.target.value)} placeholder="29.99" />
                 </Field>
                 <Field label="Stock *">
-                  <input style={FI} type="number" min="0" value={form.stock} onChange={e => setField('stock', e.target.value)} placeholder="10" />
+                  <>
+                    <input
+                      style={FI}
+                      type="number"
+                      min="0"
+                      value={formSizes.length > 0 ? String(formTotalStock) : form.stock}
+                      onChange={e => setField('stock', e.target.value)}
+                      placeholder="10"
+                      disabled={formSizes.length > 0}
+                    />
+                    {formSizes.length > 0 && (
+                      <div className="muted" style={{ fontSize: '.76rem', marginTop: 6 }}>
+                        Total stock is calculated from the per-size inventory below.
+                      </div>
+                    )}
+                  </>
                 </Field>
                 <Field label="Badge">
                   <select style={FI} value={form.badge} onChange={e => setField('badge', e.target.value)}>
@@ -556,6 +654,27 @@ export function VendorDashboardClient() {
                 <Field label="Sizes">
                   <input style={FI} value={form.sizes} onChange={e => setField('sizes', e.target.value)} placeholder="XS, S, M, L, XL" />
                 </Field>
+                {formSizes.length > 0 && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <Field label="Inventory by size">
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+                        {formSizes.map(size => (
+                          <div key={size}>
+                            <label style={{ ...FL, marginBottom: 6 }}>{size}</label>
+                            <input
+                              style={FI}
+                              type="number"
+                              min="0"
+                              value={formSizeInventory[size] || ''}
+                              onChange={e => setSizeInventoryField(size, e.target.value)}
+                              placeholder="0"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </Field>
+                  </div>
+                )}
                 <Field label="Finish">
                   <input style={FI} value={form.finish} onChange={e => setField('finish', e.target.value)} placeholder="Glossy, matte, glitter..." />
                 </Field>
@@ -608,7 +727,13 @@ export function VendorDashboardClient() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredProducts.map(p => (
+                  {filteredProducts.map(p => {
+                    const effectiveStock = getEffectiveStock(p);
+                    const sizeSummary = parseSizes(p.sizes || '')
+                      .map(size => `${size}: ${p.sizeInventory?.[size] ?? 0}`)
+                      .join(' · ');
+
+                    return (
                     <tr key={p.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -624,18 +749,23 @@ export function VendorDashboardClient() {
                         {p.originalPrice && <span className="muted" style={{ marginLeft: 6, textDecoration: 'line-through', fontSize: '.82rem' }}>${p.originalPrice}</span>}
                       </td>
                       <td>
-                        <span className={p.stock === 0 ? 'stock-out' : p.stock <= 3 ? 'stock-low' : 'stock-ok'}>{p.stock}</span>
-                        {p.stock > 0 && p.availability !== 'made_to_order' && (
+                        <span className={effectiveStock === 0 ? 'stock-out' : effectiveStock <= 3 ? 'stock-low' : 'stock-ok'}>{effectiveStock}</span>
+                        {!!sizeSummary && (
+                          <div className="muted" style={{ fontSize: '.72rem', marginTop: 4, lineHeight: 1.4 }}>
+                            {sizeSummary}
+                          </div>
+                        )}
+                        {effectiveStock > 0 && p.availability !== 'made_to_order' && (
                           <div className="progress-wrap" style={{ marginTop: 5, width: 60 }}>
-                            <div className="progress-fill" style={{ width: `${Math.min(100, (p.stock / 20) * 100)}%`, background: p.stock <= 3 ? 'var(--warning)' : undefined }} />
+                            <div className="progress-fill" style={{ width: `${Math.min(100, (effectiveStock / 20) * 100)}%`, background: effectiveStock <= 3 ? 'var(--warning)' : undefined }} />
                           </div>
                         )}
                       </td>
                       <td className="muted">{p.shape}</td>
                       <td className="muted">{p.style}</td>
                       <td>
-                        <span className={`avail-pill ${p.availability === 'made_to_order' ? 'avail-made-to-order' : p.stock === 0 ? 'avail-out' : 'avail-in-stock'}`}>
-                          {p.availability === 'made_to_order' ? 'MTO' : p.stock === 0 ? 'Out' : 'In stock'}
+                        <span className={`avail-pill ${p.availability === 'made_to_order' ? 'avail-made-to-order' : effectiveStock === 0 ? 'avail-out' : 'avail-in-stock'}`}>
+                          {p.availability === 'made_to_order' ? 'MTO' : effectiveStock === 0 ? 'Out' : 'In stock'}
                         </span>
                       </td>
                       <td>
@@ -652,7 +782,8 @@ export function VendorDashboardClient() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

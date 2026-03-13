@@ -1,78 +1,61 @@
 import Link from 'next/link';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
+import { AddToCartSection } from '@/components/AddToCartSection';
+import { mapProduct, mapReview, supabaseAdmin } from '@/lib/route-helpers';
+import type { Product, Review, VendorSummary } from '@/lib/types';
 
-type ProductReview = {
-  id: string;
-  rating: number;
-  title?: string;
-  body: string;
-  createdAt: string;
-  user?: { name?: string } | null;
+type ProductDetail = Product & {
+  reviews: Review[];
+  vendor: VendorSummary | null;
 };
 
-type ProductVendor = {
-  id: string;
-  name: string;
-  emoji?: string;
-  bgColor?: string;
-};
+function getEffectiveStock(product: Product) {
+  const sizes = product.sizes
+    ? product.sizes
+        .split(/[,;]/)
+        .map((size) => size.trim())
+        .filter(Boolean)
+    : [];
 
-type Product = {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  originalPrice?: number | null;
-  emoji?: string;
-  bgColor?: string;
-  badge?: string | null;
-  stock: number;
-  availability?: string;
-  rating?: number;
-  reviewCount?: number;
-  shape?: string;
-  style?: string;
-  nailCount?: number | null;
-  finish?: string;
-  wearTime?: string;
-  sizes?: string;
-  glueIncluded?: boolean | null;
-  reusable?: boolean | null;
-  productionDays?: number | null;
-  occasions?: string[];
-  vendor?: ProductVendor | null;
-  reviews?: ProductReview[];
-};
-
-async function getProduct(id: string): Promise<Product> {
-  const h = await headers();
-  const host = h.get('x-forwarded-host') ?? h.get('host');
-
-  if (!host) {
-    throw new Error('Missing host header');
+  if (!sizes.length || !product.sizeInventory) {
+    return product.stock;
   }
 
-  const proto = h.get('x-forwarded-proto') ?? 'https';
-  const baseUrl = `${proto}://${host}`;
+  return sizes.reduce(
+    (sum, size) => sum + Math.max(0, Number(product.sizeInventory?.[size] ?? 0)),
+    0
+  );
+}
 
-  const response = await fetch(`${baseUrl}/api/products/${id}`, {
-    cache: 'no-store',
-  });
+async function getProduct(id: string): Promise<ProductDetail> {
+  const { data: productRow, error } = await supabaseAdmin
+    .from('products')
+    .select('*, vendors!vendor_id(id, name, emoji, bg_color)')
+    .eq('id', id)
+    .eq('hidden', false)
+    .single();
 
-  if (response.status === 404) {
+  if (error || !productRow) {
     notFound();
   }
 
-  const data = await response.json().catch(() => null);
+  const { data: reviews } = await supabaseAdmin
+    .from('reviews')
+    .select('*, profiles!user_id(name)')
+    .eq('product_id', id)
+    .order('created_at', { ascending: false });
 
-  if (!response.ok) {
-    throw new Error(
-      data?.error || `Failed to load product ${id} (${response.status})`
-    );
-  }
+  const vendor = productRow.vendors as Record<string, unknown> | null;
+  const product = mapProduct(productRow, vendor) as unknown as Product;
 
-  return data as Product;
+  return {
+    ...product,
+    vendor: product.vendor ?? null,
+    reviews: (reviews || []).map((reviewRow: Record<string, unknown>) => {
+      const profile = reviewRow.profiles as { name: string } | null;
+      return mapReview(reviewRow, profile);
+    }) as unknown as Review[],
+  };
 }
 
 export default async function ProductDetailPage({
@@ -86,8 +69,9 @@ export default async function ProductDetailPage({
   const salePct = product.originalPrice
     ? Math.round((1 - product.price / product.originalPrice) * 100)
     : null;
+  const effectiveStock = getEffectiveStock(product);
   const isOutOfStock =
-    product.stock === 0 && product.availability !== 'made_to_order';
+    effectiveStock === 0 && product.availability !== 'made_to_order';
   const ratingFull = Math.round(product.rating || 0);
 
   return (
@@ -276,7 +260,7 @@ export default async function ProductDetailPage({
                     borderColor: '#86efac',
                   }}
                 >
-                  Glue included ✓
+                  Glue included
                 </span>
               ) : product.glueIncluded === false ? (
                 <span className="tag">No glue</span>
@@ -290,7 +274,7 @@ export default async function ProductDetailPage({
                     borderColor: '#86efac',
                   }}
                 >
-                  Reusable ✓
+                  Reusable
                 </span>
               ) : product.reusable === false ? (
                 <span className="tag">Single use</span>
@@ -313,37 +297,30 @@ export default async function ProductDetailPage({
                   Great for
                 </span>
                 <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                  {product.occasions.map((occ) => (
-                    <span key={occ} className="chip">
-                      {occ}
+                  {product.occasions.map((occasion) => (
+                    <span key={occasion} className="chip">
+                      {occasion}
                     </span>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="stack-row">
-              <button
-                className="pill btn-primary"
-                style={{
-                  flex: 1,
-                  justifyContent: 'center',
-                  fontSize: '1rem',
-                  padding: '13px 24px',
-                }}
-              >
-                Add to cart
-              </button>
-              {product.vendor && (
-                <Link
-                  className="pill btn-ghost"
-                  href={`/vendors/${product.vendor.id}`}
-                  style={{ flexShrink: 0 }}
-                >
-                  Visit shop
-                </Link>
-              )}
-            </div>
+            <AddToCartSection
+              product={{
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                emoji: product.emoji,
+                bgColor: product.bgColor,
+                vendorId: product.vendorId,
+                vendorName: product.vendor?.name,
+                sizes: product.sizes,
+                sizeInventory: product.sizeInventory,
+                stock: effectiveStock,
+                availability: product.availability,
+              }}
+            />
           </div>
         </div>
 

@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, getAuthUser, err } from '@/lib/route-helpers';
 
+function parseSizes(value: unknown, fallback: string[] = []) {
+  const parsed = String(value || '')
+    .split(/[,;]/)
+    .map((size) => size.trim())
+    .filter(Boolean);
+  return parsed.length > 0 ? parsed : fallback;
+}
+
+function normalizeSizeInventory(value: unknown, sizes: string[]) {
+  if (typeof value !== 'object' || value === null) return {};
+
+  const source = value as Record<string, unknown>;
+  return sizes.reduce<Record<string, number>>((acc, size) => {
+    const parsed = parseInt(String(source[size] ?? '0'), 10);
+    acc[size] = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    return acc;
+  }, {});
+}
+
 function parseOne(raw: Record<string, unknown>, vendorId: string) {
   const name = String(raw.name || '').trim().slice(0, 120);
   const price = parseFloat(String(raw.price || '0'));
@@ -8,6 +27,13 @@ function parseOne(raw: Record<string, unknown>, vendorId: string) {
   if (!name) throw new Error('name is required');
   if (!Number.isFinite(price) || price <= 0) throw new Error('valid price is required');
   if (!Number.isFinite(stock) || stock < 0) throw new Error('valid stock is required');
+  const sizeInventoryKeys =
+    typeof raw.sizeInventory === 'object' && raw.sizeInventory !== null
+      ? Object.keys(raw.sizeInventory as Record<string, unknown>).map((size) => size.trim()).filter(Boolean)
+      : [];
+  const sizes = parseSizes(raw.sizes, sizeInventoryKeys);
+  const sizeInventory = normalizeSizeInventory(raw.sizeInventory, sizes);
+  const hasSizeInventory = sizes.length > 0 && sizeInventoryKeys.length > 0;
 
   return {
     vendor_id: vendorId,
@@ -20,13 +46,16 @@ function parseOne(raw: Record<string, unknown>, vendorId: string) {
     shape: raw.shape || 'almond',
     style: raw.style || 'minimal',
     badge: raw.badge || null,
-    stock,
+    stock: hasSizeInventory
+      ? Object.values(sizeInventory).reduce((sum, count) => sum + count, 0)
+      : stock,
     tags: Array.isArray(raw.tags) ? raw.tags : [],
     availability: raw.availability || 'in_stock',
     production_days: raw.productionDays ? parseInt(String(raw.productionDays)) : null,
     occasions: Array.isArray(raw.occasions) ? raw.occasions : [],
     nail_count: raw.nailCount ? parseInt(String(raw.nailCount)) : null,
-    sizes: String(raw.sizes || '').slice(0, 120),
+    sizes: sizes.join(', ').slice(0, 120),
+    size_inventory: hasSizeInventory ? sizeInventory : {},
     finish: String(raw.finish || '').slice(0, 80),
     glue_included: raw.glueIncluded !== undefined ? Boolean(raw.glueIncluded) : null,
     reusable: raw.reusable !== undefined ? Boolean(raw.reusable) : null,

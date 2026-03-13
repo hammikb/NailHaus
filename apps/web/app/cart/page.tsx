@@ -16,15 +16,18 @@ export default function CartPage() {
   const [success, setSuccess] = useState('');
 
   async function handleCheckout() {
-    if (!user) { router.push('/login'); return; }
+    if (!user) {
+      router.push('/login');
+      return;
+    }
     if (!items.length) return;
 
     setPlacing(true);
     setError('');
     try {
-      await api.checkout(items.map(i => ({ productId: i.productId, qty: i.qty })));
+      await api.checkout(items.map((item) => ({ productId: item.productId, qty: item.qty })));
       clear();
-      setSuccess('Order placed successfully! 🎉');
+      setSuccess('Order placed successfully!');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Checkout failed. Please try again.');
     } finally {
@@ -38,9 +41,11 @@ export default function CartPage() {
         <div className="container" style={{ maxWidth: 560 }}>
           <div className="panel" style={{ padding: 48, textAlign: 'center' }}>
             <div style={{ fontSize: '3rem', marginBottom: 16 }}>🎉</div>
-            <h1 className="section-title" style={{ marginBottom: 10 }}>Order <em>confirmed!</em></h1>
+            <h1 className="section-title" style={{ marginBottom: 10 }}>
+              Order <em>confirmed!</em>
+            </h1>
             <p className="subtle" style={{ lineHeight: 1.7, marginBottom: 24 }}>
-              Your order has been placed. You'll receive updates from your vendors soon.
+              Your order has been placed. You&apos;ll receive updates from your vendors soon.
             </p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Link href="/orders" className="pill btn-primary">View my orders</Link>
@@ -75,57 +80,92 @@ export default function CartPage() {
           <div className="panel empty-state">
             <span className="empty-icon">🛒</span>
             <p style={{ fontWeight: 700, marginBottom: 8 }}>Your cart is empty</p>
-            <p className="muted" style={{ marginTop: 0, marginBottom: 20, fontSize: '.9rem' }}>Browse our nail sets and find something you love.</p>
+            <p className="muted" style={{ marginTop: 0, marginBottom: 20, fontSize: '.9rem' }}>
+              Browse our nail sets and find something you love.
+            </p>
             <Link href="/shop" className="pill btn-primary">Browse sets</Link>
           </div>
         ) : (
           <div className="two-col" style={{ gap: 28, alignItems: 'start' }}>
-            {/* Items list */}
             <div className="list">
-              {items.map(item => (
-                <div key={item.productId} className="panel" style={{ padding: 20 }}>
-                  <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                    <div style={{
-                      width: 80, height: 80, borderRadius: 16, display: 'grid', placeItems: 'center',
-                      fontSize: '2.4rem', background: item.bgColor, flexShrink: 0,
-                    }}>
-                      {item.emoji}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 800, marginBottom: 3 }}>{item.name}</div>
-                      {item.vendorName && (
-                        <div className="muted" style={{ fontSize: '.82rem', marginBottom: 10 }}>{item.vendorName}</div>
-                      )}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-                        <div className="qty-control">
-                          <button className="qty-btn" onClick={() => updateQty(item.productId, item.qty - 1)} disabled={item.qty <= 1}>−</button>
-                          <span className="qty-val">{item.qty}</span>
-                          <button className="qty-btn" onClick={() => updateQty(item.productId, item.qty + 1)}>+</button>
-                        </div>
-                        <span style={{ fontWeight: 800 }}>${(item.price * item.qty).toFixed(2)}</span>
-                        <span className="muted" style={{ fontSize: '.82rem' }}>${item.price.toFixed(2)} each</span>
+              {items.map((item) => {
+                const itemKey = `${item.productId}|${item.size || ''}`;
+
+                return (
+                  <div key={itemKey} className="panel" style={{ padding: 20 }}>
+                    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                      <div
+                        style={{
+                          width: 80,
+                          height: 80,
+                          borderRadius: 16,
+                          display: 'grid',
+                          placeItems: 'center',
+                          fontSize: '2.4rem',
+                          background: item.bgColor,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {item.emoji}
                       </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, marginBottom: 3 }}>{item.name}</div>
+                        {item.vendorName && (
+                          <div className="muted" style={{ fontSize: '.82rem', marginBottom: 10 }}>
+                            {item.vendorName}
+                          </div>
+                        )}
+                        {item.size && (
+                          <div className="muted" style={{ fontSize: '.8rem', marginBottom: 10 }}>
+                            Size: {item.size}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                          <div className="qty-control">
+                            <button
+                              className="qty-btn"
+                              onClick={() => updateQty(item.productId, item.qty - 1, item.size)}
+                              disabled={item.qty <= 1}
+                            >
+                              -
+                            </button>
+                            <span className="qty-val">{item.qty}</span>
+                            <button
+                              className="qty-btn"
+                              onClick={() => updateQty(item.productId, item.qty + 1, item.size)}
+                            >
+                              +
+                            </button>
+                          </div>
+                          <span style={{ fontWeight: 800 }}>${(item.price * item.qty).toFixed(2)}</span>
+                          <span className="muted" style={{ fontSize: '.82rem' }}>
+                            ${item.price.toFixed(2)} each
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        className="pill btn-ghost btn-sm"
+                        style={{ color: 'var(--danger)', flexShrink: 0 }}
+                        onClick={() => removeItem(item.productId, item.size)}
+                      >
+                        Remove
+                      </button>
                     </div>
-                    <button
-                      className="pill btn-ghost btn-sm"
-                      style={{ color: 'var(--danger)', flexShrink: 0 }}
-                      onClick={() => removeItem(item.productId)}
-                    >
-                      Remove
-                    </button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
-            {/* Order summary */}
             <div className="panel" style={{ padding: 28, position: 'sticky', top: 90 }}>
               <h2 style={{ fontSize: '1.1rem', fontWeight: 800, margin: '0 0 20px' }}>Order summary</h2>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-                {items.map(item => (
-                  <div key={item.productId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.88rem' }}>
-                    <span className="muted">{item.name} × {item.qty}</span>
+                {items.map((item) => (
+                  <div
+                    key={`${item.productId}|${item.size || ''}`}
+                    style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.88rem' }}
+                  >
+                    <span className="muted">{item.name} x {item.qty}</span>
                     <span style={{ fontWeight: 600 }}>${(item.price * item.qty).toFixed(2)}</span>
                   </div>
                 ))}
@@ -143,7 +183,9 @@ export default function CartPage() {
 
               {!user && (
                 <div className="alert alert-info" style={{ marginBottom: 14 }}>
-                  <span>Please <Link href="/login" style={{ fontWeight: 700, color: 'var(--info)' }}>sign in</Link> to place your order.</span>
+                  <span>
+                    Please <Link href="/login" style={{ fontWeight: 700, color: 'var(--info)' }}>sign in</Link> to place your order.
+                  </span>
                 </div>
               )}
 

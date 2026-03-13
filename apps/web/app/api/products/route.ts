@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, getAuthUser, mapProduct, err } from '@/lib/route-helpers';
 
+function parseSizes(value: unknown, fallback: string[] = []) {
+  const parsed = String(value || '')
+    .split(/[,;]/)
+    .map((size) => size.trim())
+    .filter(Boolean);
+  return parsed.length > 0 ? parsed : fallback;
+}
+
+function normalizeSizeInventory(value: unknown, sizes: string[]) {
+  if (typeof value !== 'object' || value === null) return {};
+
+  const source = value as Record<string, unknown>;
+  return sizes.reduce<Record<string, number>>((acc, size) => {
+    const parsed = parseInt(String(source[size] ?? '0'), 10);
+    acc[size] = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    return acc;
+  }, {});
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const shape = searchParams.get('shape');
@@ -57,6 +76,13 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const { name, price, stock } = body;
   if (!name || price == null || stock == null) return err('Name, price, and stock are required');
+  const sizeInventoryKeys =
+    typeof body.sizeInventory === 'object' && body.sizeInventory !== null
+      ? Object.keys(body.sizeInventory as Record<string, unknown>).map((size) => size.trim()).filter(Boolean)
+      : [];
+  const sizes = parseSizes(body.sizes, sizeInventoryKeys);
+  const sizeInventory = normalizeSizeInventory(body.sizeInventory, sizes);
+  const hasSizeInventory = sizes.length > 0 && sizeInventoryKeys.length > 0;
 
   const product = {
     vendor_id: vendor.id,
@@ -69,14 +95,17 @@ export async function POST(req: NextRequest) {
     shape: body.shape || 'almond',
     style: body.style || 'minimal',
     badge: body.badge || null,
-    stock: parseInt(stock),
+    stock: hasSizeInventory
+      ? Object.values(sizeInventory).reduce((sum, count) => sum + count, 0)
+      : parseInt(stock),
     tags: Array.isArray(body.tags) ? body.tags : [],
     availability: body.availability || 'in_stock',
     production_days: body.productionDays ? parseInt(body.productionDays) : null,
     occasions: Array.isArray(body.occasions) ? body.occasions : [],
     collection_id: body.collectionId || null,
     nail_count: body.nailCount ? parseInt(body.nailCount) : null,
-    sizes: String(body.sizes || '').slice(0, 120),
+    sizes: sizes.join(', ').slice(0, 120),
+    size_inventory: hasSizeInventory ? sizeInventory : {},
     finish: String(body.finish || '').slice(0, 80),
     glue_included: body.glueIncluded !== undefined ? Boolean(body.glueIncluded) : null,
     reusable: body.reusable !== undefined ? Boolean(body.reusable) : null,
