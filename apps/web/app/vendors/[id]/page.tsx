@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { ProductCard } from '@/components/ProductCard';
 import { api } from '@/lib/api';
 
@@ -6,7 +7,8 @@ const SOCIAL_ICONS: Record<string, string> = { instagram: '📸', tiktok: '🎵'
 
 export default async function VendorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const vendor = await api.getVendor(id);
+  const vendor = await api.getVendor(id).catch(() => null);
+  if (!vendor) notFound();
 
   const memberSince = vendor.createdAt
     ? new Date(vendor.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })

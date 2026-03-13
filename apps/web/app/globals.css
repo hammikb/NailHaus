@@ -600,3 +600,49 @@ button { cursor: pointer; }
 /* ─── Chip variants ──────────────────────────────────── */
 .chip-success { background: var(--success-bg) !important; color: var(--success) !important; border-color: #86efac !important; }
 .chip-danger { background: var(--danger-bg) !important; color: var(--danger) !important; border-color: #fecdd3 !important; }
+
+/* ─── Vendor Avatar ──────────────────────────────────── */
+.vendor-avatar {
+  width: 56px; height: 56px; border-radius: 18px; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 1.6rem;
+  border: 1px solid rgba(0,0,0,.06);
+  transition: transform .2s;
+}
+.vendor-card:hover .vendor-avatar { transform: scale(1.06); }
+
+/* ─── Floating tile animation ────────────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+.hero-tiles .tile:nth-child(1) { animation: float 3.6s ease-in-out infinite; }
+.hero-tiles .tile:nth-child(2) { animation: float 4.1s ease-in-out infinite 0.6s; }
+.hero-tiles .tile:nth-child(3) { animation: float 3.9s ease-in-out infinite 1.1s; }
+.hero-tiles .tile:nth-child(4) { animation: float 4.3s ease-in-out infinite 0.4s; }
+
+/* ─── Product card accent line on hover ──────────────── */
+.product-card { position: relative; }
+.product-card::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2.5px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-dark));
+  transform: scaleX(0); transform-origin: left; transition: transform .25s var(--ease);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.product-card:hover::after { transform: scaleX(1); }
+
+/* ─── Product thumb gloss ────────────────────────────── */
+.product-thumb::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 30% 25%, rgba(255,255,255,.3) 0%, transparent 60%);
+}
+
+/* ─── How it works steps ─────────────────────────────── */
+.step-card {
+  padding: 28px 24px; position: relative; overflow: hidden;
+}
+.step-num {
+  position: absolute; top: -4px; right: 8px;
+  font-size: 5rem; font-weight: 900; opacity: .05;
+  line-height: 1; color: var(--accent); pointer-events: none;
+  font-feature-settings: 'tnum';
+}

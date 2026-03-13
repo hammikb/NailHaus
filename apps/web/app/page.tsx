@@ -39,9 +39,18 @@ export default async function HomePage() {
               <Link className="pill btn-ghost" href="/vendors">Browse vendors</Link>
             </div>
             <div className="stats">
-              <div className="stat"><strong>240+</strong><span className="muted">Active vendors</span></div>
-              <div className="stat"><strong>12k+</strong><span className="muted">Listed sets</span></div>
-              <div className="stat"><strong>98k+</strong><span className="muted">Happy customers</span></div>
+              <div className="stat">
+                <strong style={{ color: 'var(--accent)' }}>240+</strong>
+                <span className="muted" style={{ fontSize: '.8rem' }}>Verified vendors</span>
+              </div>
+              <div className="stat">
+                <strong style={{ color: 'var(--accent)' }}>12k+</strong>
+                <span className="muted" style={{ fontSize: '.8rem' }}>Listed sets</span>
+              </div>
+              <div className="stat">
+                <strong style={{ color: 'var(--accent)' }}>98k+</strong>
+                <span className="muted" style={{ fontSize: '.8rem' }}>Happy customers</span>
+              </div>
             </div>
           </div>
 
@@ -119,6 +128,33 @@ export default async function HomePage() {
               <span className="trust-icon">🎨</span>
               <div><div className="trust-title">Indie artists</div><div className="trust-desc">Curated handcrafted sets</div></div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── How it Works ────────────────────────────── */}
+      <section className="section">
+        <div className="container">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Simple process</p>
+              <h2 className="section-title">How <em>it works</em></h2>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 16 }}>
+            {[
+              { emoji: '🔍', title: 'Browse & discover', desc: 'Explore thousands of handcrafted press-on sets from indie artists worldwide.' },
+              { emoji: '🛒', title: 'Add to cart', desc: 'Choose your favourites. Mix sets from multiple vendors in one order.' },
+              { emoji: '📦', title: 'Artist ships to you', desc: 'Your vendor prepares and ships directly. Track every step of the way.' },
+              { emoji: '💅', title: 'Slay your look', desc: 'Apply in minutes. Salon-quality nails without the salon price or wait.' },
+            ].map((step, i) => (
+              <div key={i} className="panel step-card">
+                <div className="step-num">{i + 1}</div>
+                <div style={{ fontSize: '2rem', marginBottom: 14 }}>{step.emoji}</div>
+                <div style={{ fontWeight: 800, fontSize: '.95rem', marginBottom: 8 }}>{step.title}</div>
+                <p className="muted" style={{ fontSize: '.84rem', lineHeight: 1.65, margin: 0 }}>{step.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
