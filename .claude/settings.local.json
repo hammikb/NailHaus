@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(rm \"c:/Users/kaib1/OneDrive/Desktop/Projects/NailHaus/apps/web/app/modern/page.tsx\")",
-      "Bash(rmdir \"c:/Users/kaib1/OneDrive/Desktop/Projects/NailHaus/apps/web/app/modern\")"
+      "Bash(rmdir \"c:/Users/kaib1/OneDrive/Desktop/Projects/NailHaus/apps/web/app/modern\")",
+      "Bash(ls -la \"/c/Users/kaib1/OneDrive/Desktop/Projects/NailHaus/\"*.sql)"
     ]
   }
 }

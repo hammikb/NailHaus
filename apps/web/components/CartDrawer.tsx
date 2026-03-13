@@ -37,37 +37,37 @@ export function CartDrawer() {
         ) : (
           <>
             <div className="cart-items">
-              {items.map(item => (
-                <div key={item.productId} className="cart-item">
-                  <div
-                    className="cart-item-thumb"
-                    style={{ background: item.bgColor }}
-                  >
-                    {item.emoji}
-                  </div>
-                  <div className="cart-item-info">
-                    <div style={{ fontWeight: 700, fontSize: '.9rem', lineHeight: 1.3, marginBottom: 3 }}>{item.name}</div>
-                    {item.vendorName && (
-                      <div className="muted" style={{ fontSize: '.76rem', marginBottom: 8 }}>{item.vendorName}</div>
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div className="qty-control">
-                        <button className="qty-btn" onClick={() => updateQty(item.productId, item.qty - 1)} disabled={item.qty <= 1}>−</button>
-                        <span className="qty-val">{item.qty}</span>
-                        <button className="qty-btn" onClick={() => updateQty(item.productId, item.qty + 1)}>+</button>
-                      </div>
-                      <span style={{ fontWeight: 800, fontSize: '.95rem' }}>${(item.price * item.qty).toFixed(2)}</span>
+              {items.map(item => {
+                const key = `${item.productId}|${item.size || ''}`;
+                return (
+                  <div key={key} className="cart-item">
+                    <div className="cart-item-thumb" style={{ background: item.bgColor }}>
+                      {item.emoji}
                     </div>
+                    <div className="cart-item-info">
+                      <div style={{ fontWeight: 700, fontSize: '.9rem', lineHeight: 1.3, marginBottom: 2 }}>{item.name}</div>
+                      {item.vendorName && (
+                        <div className="muted" style={{ fontSize: '.76rem', marginBottom: 6 }}>{item.vendorName}</div>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className="qty-control">
+                          <button className="qty-btn" onClick={() => updateQty(item.productId, item.qty - 1, item.size)} disabled={item.qty <= 1}>−</button>
+                          <span className="qty-val">{item.qty}</span>
+                          <button className="qty-btn" onClick={() => updateQty(item.productId, item.qty + 1, item.size)}>+</button>
+                        </div>
+                        <span style={{ fontWeight: 800, fontSize: '.95rem' }}>${(item.price * item.qty).toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <button
+                      className="cart-item-remove"
+                      onClick={() => removeItem(item.productId, item.size)}
+                      aria-label="Remove item"
+                    >
+                      ✕
+                    </button>
                   </div>
-                  <button
-                    className="cart-item-remove"
-                    onClick={() => removeItem(item.productId)}
-                    aria-label="Remove item"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="cart-drawer-footer">

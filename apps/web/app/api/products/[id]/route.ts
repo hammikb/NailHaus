@@ -58,6 +58,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (body.collectionId !== undefined) updates.collection_id = body.collectionId || null;
   if (body.nailCount !== undefined) updates.nail_count = body.nailCount ? parseInt(body.nailCount) : null;
   if (body.sizes !== undefined) updates.sizes = String(body.sizes).slice(0, 120);
+  if (body.sizeInventory !== undefined) updates.size_inventory = typeof body.sizeInventory === 'object' && body.sizeInventory !== null ? body.sizeInventory : {};
   if (body.finish !== undefined) updates.finish = String(body.finish).slice(0, 80);
   if (body.glueIncluded !== undefined) updates.glue_included = body.glueIncluded !== null ? Boolean(body.glueIncluded) : null;
   if (body.reusable !== undefined) updates.reusable = body.reusable !== null ? Boolean(body.reusable) : null;

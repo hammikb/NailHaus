@@ -76,6 +76,7 @@ export interface Product {
   createdAt: string;
   nailCount?: number | null;
   sizes?: string;
+  sizeInventory?: Record<string, number>;
   finish?: string;
   glueIncluded?: boolean | null;
   reusable?: boolean | null;
