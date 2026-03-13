@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!vendor || product.vendor_id !== vendor.id) return err('Forbidden', 403);
 
   const formData = await req.formData();
-  const file = formData.get('image') as File | null;
+  const file = (formData.get('file') ?? formData.get('image')) as File | null;
   if (!file) return err('No image file provided');
 
   const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
