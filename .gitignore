@@ -1,0 +1,13 @@
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+.vercel/
+dist/
+build/
+.env
+.env.local
+.env.production
+frontend/.env
+frontend/.env.local
+*.log
