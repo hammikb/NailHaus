@@ -1,11 +1,13 @@
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
+import { CartProvider } from '@/components/CartProvider';
+import { CartDrawer } from '@/components/CartDrawer';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 
 export const metadata = {
-  title: 'NailHaus',
-  description: 'The press-on nail marketplace',
+  title: 'NailHaus — The Press-On Nail Marketplace',
+  description: 'Discover handcrafted press-on nail sets from verified indie artists.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -13,9 +15,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <AuthProvider>
-          <Header />
-          {children}
-          <Footer />
+          <CartProvider>
+            <Header />
+            <CartDrawer />
+            {children}
+            <Footer />
+          </CartProvider>
         </AuthProvider>
       </body>
     </html>

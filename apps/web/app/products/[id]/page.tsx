@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { AddToCartButton } from '@/components/AddToCartButton';
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -94,9 +95,16 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             )}
 
             <div className="stack-row">
-              <button className="pill btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: '1rem', padding: '13px 24px' }}>
-                Add to cart
-              </button>
+              <AddToCartButton
+                productId={product.id}
+                name={product.name}
+                price={product.price}
+                emoji={product.emoji}
+                bgColor={product.bgColor}
+                vendorId={product.vendorId}
+                vendorName={product.vendor?.name}
+                disabled={isOutOfStock}
+              />
               {product.vendor && (
                 <Link className="pill btn-ghost" href={`/vendors/${product.vendor.id}`} style={{ flexShrink: 0 }}>Visit shop</Link>
               )}

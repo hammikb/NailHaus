@@ -1,4 +1,4 @@
-import { AuthResponse, ImportResult, PayoutSummary, Product, User, VendorDashboard, VendorDetail, VendorSummary } from './types';
+import { AdminStats, AdminUser, AuthResponse, ImportResult, Order, PayoutSummary, Product, User, VendorDashboard, VendorDetail, VendorSummary, VerificationRequest } from './types';
 
 const TOKEN_KEY = 'nh_tok';
 const USER_KEY = 'nh_usr';
@@ -110,5 +110,32 @@ export const api = {
   },
   updateVendorProfile(data: Record<string, unknown>) {
     return request<VendorDetail>('/vendors/me', { method: 'PUT', body: JSON.stringify(data) });
+  },
+  // Orders
+  getMyOrders() {
+    return request<Order[]>('/orders/my');
+  },
+  checkout(items: { productId: string; qty: number }[], shippingAddress: Record<string, string> = {}) {
+    return request<Order>('/orders', { method: 'POST', body: JSON.stringify({ items, shippingAddress }) });
+  },
+  // Admin
+  getAdminStats() {
+    return request<AdminStats>('/admin/stats');
+  },
+  getAdminUsers(search = '', role = '') {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (role) params.set('role', role);
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    return request<AdminUser[]>(`/admin/users${suffix}`);
+  },
+  toggleUserDisabled(id: string, disabled: boolean) {
+    return request<AdminUser>(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify({ disabled }) });
+  },
+  getVerificationRequests(status: 'pending' | 'all' = 'pending') {
+    return request<VerificationRequest[]>(`/admin/verification-requests?status=${status}`);
+  },
+  reviewVerification(id: string, status: 'approved' | 'rejected', adminNote = '') {
+    return request<VerificationRequest>(`/admin/verification-requests/${id}`, { method: 'PUT', body: JSON.stringify({ status, adminNote }) });
   },
 };

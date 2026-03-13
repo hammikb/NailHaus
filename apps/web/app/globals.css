@@ -487,4 +487,116 @@ button { cursor: pointer; }
   .detail-media { min-height: 280px; font-size: 5rem; }
   .footer-grid { grid-template-columns: 1fr; gap: 24px; }
   .footer-bottom { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .cart-drawer { width: 100% !important; }
 }
+
+/* ─── Cart Button & Badge ────────────────────────────── */
+.cart-btn { position: relative; }
+.cart-badge {
+  position: absolute; top: -6px; right: -6px;
+  background: var(--accent); color: white;
+  font-size: .62rem; font-weight: 800; line-height: 1;
+  min-width: 18px; height: 18px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 5px; border: 2px solid var(--bg);
+  pointer-events: none;
+}
+
+/* ─── Cart Backdrop ──────────────────────────────────── */
+.cart-backdrop {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(47,36,38,.42);
+  backdrop-filter: blur(4px);
+  animation: fadeInBack .2s ease;
+}
+@keyframes fadeInBack { from { opacity: 0; } to { opacity: 1; } }
+
+/* ─── Cart Drawer ────────────────────────────────────── */
+.cart-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 201;
+  width: 420px; max-width: 100vw;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow: -16px 0 64px rgba(97,46,60,.14);
+  display: flex; flex-direction: column;
+  animation: slideInDrawer .22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes slideInDrawer { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+.cart-drawer-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 20px 24px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.cart-drawer-count {
+  display: inline-block; margin-left: 8px;
+  background: var(--accent-light); color: var(--accent);
+  font-size: .72rem; font-weight: 800; padding: 2px 9px;
+  border-radius: var(--radius-pill);
+}
+.cart-drawer-close {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 1.5px solid var(--border); background: var(--surface);
+  display: grid; place-items: center; font-size: .88rem;
+  color: var(--muted); cursor: pointer; transition: var(--transition);
+}
+.cart-drawer-close:hover { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+
+.cart-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 40px 24px; text-align: center;
+}
+
+.cart-items {
+  flex: 1; overflow-y: auto; padding: 16px 24px;
+  display: flex; flex-direction: column; gap: 12px;
+  scrollbar-width: thin;
+}
+
+.cart-item {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 14px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--border-2);
+  transition: var(--transition);
+}
+.cart-item:hover { border-color: var(--border); }
+
+.cart-item-thumb {
+  width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 1.6rem;
+}
+.cart-item-info { flex: 1; min-width: 0; }
+.cart-item-remove {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid var(--border); background: transparent;
+  display: grid; place-items: center; font-size: .7rem;
+  color: var(--muted); cursor: pointer; transition: var(--transition); flex-shrink: 0;
+}
+.cart-item-remove:hover { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+
+.cart-drawer-footer {
+  padding: 16px 24px 24px; border-top: 1px solid var(--border); flex-shrink: 0;
+  background: var(--surface);
+}
+.cart-total-row {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;
+}
+
+/* ─── Qty Controls ───────────────────────────────────── */
+.qty-control {
+  display: inline-flex; align-items: center; gap: 0;
+  border: 1.5px solid var(--border); border-radius: var(--radius-pill);
+  overflow: hidden; background: var(--surface);
+}
+.qty-btn {
+  width: 30px; height: 30px; display: grid; place-items: center;
+  border: none; background: transparent; font-size: 1rem; font-weight: 700;
+  color: var(--muted); cursor: pointer; transition: var(--transition);
+}
+.qty-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.qty-btn:disabled { opacity: .35; cursor: not-allowed; }
+.qty-val { min-width: 28px; text-align: center; font-weight: 700; font-size: .9rem; }
+
+/* ─── Chip variants ──────────────────────────────────── */
+.chip-success { background: var(--success-bg) !important; color: var(--success) !important; border-color: #86efac !important; }
+.chip-danger { background: var(--danger-bg) !important; color: var(--danger) !important; border-color: #fecdd3 !important; }

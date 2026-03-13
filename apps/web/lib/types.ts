@@ -115,3 +115,55 @@ export interface AuthResponse {
   token: string;
   user: User;
 }
+
+export interface OrderItem {
+  id: string;
+  productId: string;
+  vendorId: string;
+  qty: number;
+  price: number;
+  products?: { id: string; name: string; emoji: string; bg_color: string } | null;
+  vendors?: { id: string; name: string; emoji: string; bg_color: string } | null;
+}
+
+export interface Order {
+  id: string;
+  userId: string;
+  total: number;
+  originalTotal?: number;
+  status: string;
+  shippingAddress: Record<string, string>;
+  createdAt: string;
+  order_items?: OrderItem[];
+}
+
+export interface AdminStats {
+  totalVendors: number;
+  totalProducts: number;
+  totalOrders: number;
+  totalUsers: number;
+  pendingVerifications: number;
+  totalRevenue: number;
+}
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  role: string;
+  disabled: boolean;
+  created_at: string;
+}
+
+export interface VerificationRequest {
+  id: string;
+  vendor_id: string;
+  user_id: string;
+  message: string;
+  links: string[];
+  status: string;
+  admin_note: string;
+  created_at: string;
+  updated_at: string;
+  vendors?: { id: string; name: string; emoji: string; bg_color: string } | null;
+  profiles?: { name: string } | null;
+}

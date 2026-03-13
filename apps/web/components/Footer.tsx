@@ -7,7 +7,7 @@ export function Footer() {
         <div className="footer-grid">
           {/* Brand column */}
           <div className="footer-brand">
-            <Link href="/shop" className="brand" style={{ fontSize: '1.4rem' }}>Nail<em>Haus</em></Link>
+            <Link href="/" className="brand" style={{ fontSize: '1.4rem' }}>Nail<em>Haus</em></Link>
             <p className="footer-tagline">The marketplace for independent press-on nail artists. Handcrafted sets, verified sellers, protected buyers.</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
               <span className="footer-badge">🛡️ Buyer protected</span>
