@@ -1,36 +1,53 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, mapVendor, mapProduct, mapReview, err } from '@/lib/route-helpers';
+// apps/web/app/api/vendors/[id]/route.ts
+import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export async function GET(
+  _req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
 
-  const { data: vendor, error } = await supabaseAdmin.from('vendors').select('*').eq('id', id).single();
-  if (error || !vendor) return err('Vendor not found', 404);
+  const { data: vendor, error } = await supabaseAdmin
+    .from('vendors')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !vendor) {
+    return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+  }
 
   const { data: products } = await supabaseAdmin
     .from('products')
     .select('*')
-    .eq('vendor_id', id)
+    .eq('vendor_id', vendor.id)
     .eq('hidden', false)
     .order('created_at', { ascending: false });
 
-  const { data: reviews } = await supabaseAdmin
-    .from('reviews')
-    .select('*, profiles!user_id(name), products!product_id(id, name)')
-    .eq('vendor_id', id)
-    .order('created_at', { ascending: false });
-
-  const vendorMin = { id: vendor.id, name: vendor.name, emoji: vendor.emoji, bg_color: vendor.bg_color };
-
-  const reviewsMapped = (reviews || []).map((r: Record<string, unknown>) => {
-    const profile = r.profiles as { name: string } | null;
-    const product = r.products as { id: string; name: string } | null;
-    return mapReview(r, profile, product);
-  });
-
   return NextResponse.json({
-    ...mapVendor(vendor),
-    products: (products || []).map((p: Record<string, unknown>) => mapProduct(p, vendorMin)),
-    reviews: reviewsMapped,
+    id: vendor.id,
+    name: vendor.name,
+    tagline: vendor.tagline,
+    description: vendor.description,
+    emoji: vendor.emoji,
+    bgColor: vendor.bg_color,
+    tags: vendor.tags || [],
+    verified: vendor.verified,
+    rating: vendor.rating,
+    totalSales: vendor.total_sales,
+    totalProducts: vendor.total_products,
+    announcement: vendor.announcement,
+    products: (products || []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      price: p.price,
+      originalPrice: p.original_price,
+      emoji: p.emoji,
+      bgColor: p.bg_color,
+      badge: p.badge,
+      rating: p.rating,
+      reviewCount: p.review_count,
+    })),
   });
 }
