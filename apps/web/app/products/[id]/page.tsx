@@ -1,146 +1,445 @@
 import Link from 'next/link';
-import { api } from '@/lib/api';
-import { AddToCartButton } from '@/components/AddToCartButton';
+import { headers } from 'next/headers';
+import { notFound } from 'next/navigation';
 
-export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
+type ProductReview = {
+  id: string;
+  rating: number;
+  title?: string;
+  body: string;
+  createdAt: string;
+  user?: { name?: string } | null;
+};
+
+type ProductVendor = {
+  id: string;
+  name: string;
+  emoji?: string;
+  bgColor?: string;
+};
+
+type Product = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  originalPrice?: number | null;
+  emoji?: string;
+  bgColor?: string;
+  badge?: string | null;
+  stock: number;
+  availability?: string;
+  rating?: number;
+  reviewCount?: number;
+  shape?: string;
+  style?: string;
+  nailCount?: number | null;
+  finish?: string;
+  wearTime?: string;
+  sizes?: string;
+  glueIncluded?: boolean | null;
+  reusable?: boolean | null;
+  productionDays?: number | null;
+  occasions?: string[];
+  vendor?: ProductVendor | null;
+  reviews?: ProductReview[];
+};
+
+async function getProduct(id: string): Promise<Product> {
+  const h = await headers();
+  const host = h.get('x-forwarded-host') ?? h.get('host');
+
+  if (!host) {
+    throw new Error('Missing host header');
+  }
+
+  const proto = h.get('x-forwarded-proto') ?? 'https';
+  const baseUrl = `${proto}://${host}`;
+
+  const response = await fetch(`${baseUrl}/api/products/${id}`, {
+    cache: 'no-store',
+  });
+
+  if (response.status === 404) {
+    notFound();
+  }
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error || `Failed to load product ${id} (${response.status})`
+    );
+  }
+
+  return data as Product;
+}
+
+export default async function ProductDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
-  const product = await api.getProduct(id);
+  const product = await getProduct(id);
 
-  const salePct = product.originalPrice ? Math.round((1 - product.price / product.originalPrice) * 100) : null;
-  const isOutOfStock = product.stock === 0 && product.availability !== 'made_to_order';
+  const salePct = product.originalPrice
+    ? Math.round((1 - product.price / product.originalPrice) * 100)
+    : null;
+  const isOutOfStock =
+    product.stock === 0 && product.availability !== 'made_to_order';
   const ratingFull = Math.round(product.rating || 0);
 
   return (
     <main className="page-shell">
       <div className="container">
-
-        {/* Breadcrumb */}
         <div className="breadcrumb">
           <Link href="/shop">Shop</Link>
           <span>/</span>
-          {product.vendor && <><Link href={`/vendors/${product.vendor.id}`}>{product.vendor.name}</Link><span>/</span></>}
+          {product.vendor && (
+            <>
+              <Link href={`/vendors/${product.vendor.id}`}>
+                {product.vendor.name}
+              </Link>
+              <span>/</span>
+            </>
+          )}
           <span>{product.name}</span>
         </div>
 
         <div className="detail-grid">
-          {/* Media */}
-          <div className="panel detail-media" style={{ background: product.bgColor, fontSize: '7rem' }}>
+          <div
+            className="panel detail-media"
+            style={{
+              background: product.bgColor || '#fde8e8',
+              fontSize: '7rem',
+            }}
+          >
             {product.badge && (
-              <span className={`badge badge-${product.badge}`} style={{ position: 'absolute', top: 18, left: 18, fontSize: '.8rem' }}>
+              <span
+                className={`badge badge-${product.badge}`}
+                style={{
+                  position: 'absolute',
+                  top: 18,
+                  left: 18,
+                  fontSize: '.8rem',
+                }}
+              >
                 {product.badge.toUpperCase()}
               </span>
             )}
-            {product.emoji}
+            {product.emoji || '💅'}
           </div>
 
-          {/* Info panel */}
           <div className="panel" style={{ padding: 32 }}>
-            {/* Vendor chip */}
             {product.vendor && (
-              <Link href={`/vendors/${product.vendor.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 12, padding: '5px 12px', borderRadius: 999, border: '1px solid var(--border)', fontSize: '.82rem', fontWeight: 600, color: 'var(--muted)', transition: 'all .15s' }}>
-                <span style={{ width: 22, height: 22, borderRadius: 7, background: product.vendor.bgColor, display: 'grid', placeItems: 'center', fontSize: '.72rem' }}>{product.vendor.emoji}</span>
+              <Link
+                href={`/vendors/${product.vendor.id}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  marginBottom: 12,
+                  padding: '5px 12px',
+                  borderRadius: 999,
+                  border: '1px solid var(--border)',
+                  fontSize: '.82rem',
+                  fontWeight: 600,
+                  color: 'var(--muted)',
+                  transition: 'all .15s',
+                }}
+              >
+                <span
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 7,
+                    background: product.vendor.bgColor || '#fde8e8',
+                    display: 'grid',
+                    placeItems: 'center',
+                    fontSize: '.72rem',
+                  }}
+                >
+                  {product.vendor.emoji || '💅'}
+                </span>
                 {product.vendor.name}
               </Link>
             )}
 
-            <h1 className="section-title" style={{ marginTop: 0, marginBottom: 10, fontSize: '2rem' }}>{product.name}</h1>
+            <h1
+              className="section-title"
+              style={{ marginTop: 0, marginBottom: 10, fontSize: '2rem' }}
+            >
+              {product.name}
+            </h1>
 
-            {/* Rating */}
             {(product.reviewCount ?? 0) > 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-                <span style={{ color: '#f59e0b', fontSize: '1rem' }}>{'★'.repeat(ratingFull)}{'☆'.repeat(5 - ratingFull)}</span>
-                <span style={{ fontWeight: 700 }}>{Number(product.rating).toFixed(1)}</span>
-                <span className="muted" style={{ fontSize: '.85rem' }}>({product.reviewCount} review{product.reviewCount !== 1 ? 's' : ''})</span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 18,
+                }}
+              >
+                <span style={{ color: '#f59e0b', fontSize: '1rem' }}>
+                  {'★'.repeat(ratingFull)}
+                  {'☆'.repeat(5 - ratingFull)}
+                </span>
+                <span style={{ fontWeight: 700 }}>
+                  {Number(product.rating || 0).toFixed(1)}
+                </span>
+                <span className="muted" style={{ fontSize: '.85rem' }}>
+                  ({product.reviewCount} review
+                  {product.reviewCount !== 1 ? 's' : ''})
+                </span>
               </div>
             ) : (
-              <div className="muted" style={{ fontSize: '.85rem', marginBottom: 18 }}>No reviews yet</div>
+              <div
+                className="muted"
+                style={{ fontSize: '.85rem', marginBottom: 18 }}
+              >
+                No reviews yet
+              </div>
             )}
 
-            {/* Price */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '2rem', fontWeight: 900, letterSpacing: '-.02em' }}>${product.price}</span>
-              {product.originalPrice && <span className="price-strike" style={{ fontSize: '1.1rem' }}>${product.originalPrice}</span>}
-              {salePct && <span className="sale-pct" style={{ fontSize: '.88rem', padding: '4px 10px' }}>{salePct}% off</span>}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                marginBottom: 16,
+                flexWrap: 'wrap',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '2rem',
+                  fontWeight: 900,
+                  letterSpacing: '-.02em',
+                }}
+              >
+                ${product.price}
+              </span>
+              {product.originalPrice && (
+                <span className="price-strike" style={{ fontSize: '1.1rem' }}>
+                  ${product.originalPrice}
+                </span>
+              )}
+              {salePct && (
+                <span
+                  className="sale-pct"
+                  style={{ fontSize: '.88rem', padding: '4px 10px' }}
+                >
+                  {salePct}% off
+                </span>
+              )}
               {isOutOfStock ? (
                 <span className="avail-pill avail-out">Out of stock</span>
               ) : product.availability === 'made_to_order' ? (
-                <span className="avail-pill avail-made-to-order">Made to order{product.productionDays ? ` · ~${product.productionDays} days` : ''}</span>
+                <span className="avail-pill avail-made-to-order">
+                  Made to order
+                  {product.productionDays
+                    ? ` · ~${product.productionDays} days`
+                    : ''}
+                </span>
               ) : (
                 <span className="avail-pill avail-in-stock">In stock</span>
               )}
             </div>
 
-            <p className="subtle" style={{ marginBottom: 20, lineHeight: 1.7 }}>{product.description}</p>
+            <p className="subtle" style={{ marginBottom: 20, lineHeight: 1.7 }}>
+              {product.description}
+            </p>
 
-            {/* Spec tags */}
             <div className="tags" style={{ marginBottom: 18 }}>
-              <span className="tag">💅 {product.shape}</span>
-              <span className="tag">🎨 {product.style}</span>
-              {product.nailCount ? <span className="tag">{product.nailCount} nails</span> : null}
-              {product.finish ? <span className="tag">✨ {product.finish}</span> : null}
-              {product.wearTime ? <span className="tag">⏱ {product.wearTime}</span> : null}
-              {product.sizes ? <span className="tag">📏 {product.sizes}</span> : null}
-              {product.glueIncluded === true ? <span className="tag" style={{ background: 'var(--success-bg)', color: 'var(--success)', borderColor: '#86efac' }}>Glue included ✓</span> : product.glueIncluded === false ? <span className="tag">No glue</span> : null}
-              {product.reusable === true ? <span className="tag" style={{ background: 'var(--success-bg)', color: 'var(--success)', borderColor: '#86efac' }}>Reusable ✓</span> : product.reusable === false ? <span className="tag">Single use</span> : null}
+              <span className="tag">💅 {product.shape || 'almond'}</span>
+              <span className="tag">🎨 {product.style || 'minimal'}</span>
+              {product.nailCount ? (
+                <span className="tag">{product.nailCount} nails</span>
+              ) : null}
+              {product.finish ? (
+                <span className="tag">✨ {product.finish}</span>
+              ) : null}
+              {product.wearTime ? (
+                <span className="tag">⏱ {product.wearTime}</span>
+              ) : null}
+              {product.sizes ? (
+                <span className="tag">📏 {product.sizes}</span>
+              ) : null}
+              {product.glueIncluded === true ? (
+                <span
+                  className="tag"
+                  style={{
+                    background: 'var(--success-bg)',
+                    color: 'var(--success)',
+                    borderColor: '#86efac',
+                  }}
+                >
+                  Glue included ✓
+                </span>
+              ) : product.glueIncluded === false ? (
+                <span className="tag">No glue</span>
+              ) : null}
+              {product.reusable === true ? (
+                <span
+                  className="tag"
+                  style={{
+                    background: 'var(--success-bg)',
+                    color: 'var(--success)',
+                    borderColor: '#86efac',
+                  }}
+                >
+                  Reusable ✓
+                </span>
+              ) : product.reusable === false ? (
+                <span className="tag">Single use</span>
+              ) : null}
             </div>
 
-            {/* Occasions */}
             {product.occasions && product.occasions.length > 0 && (
               <div style={{ marginBottom: 22 }}>
-                <span className="muted" style={{ fontSize: '.76rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', display: 'block', marginBottom: 8 }}>Great for</span>
+                <span
+                  className="muted"
+                  style={{
+                    fontSize: '.76rem',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    letterSpacing: '.06em',
+                    display: 'block',
+                    marginBottom: 8,
+                  }}
+                >
+                  Great for
+                </span>
                 <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                  {product.occasions.map(occ => <span key={occ} className="chip">{occ}</span>)}
+                  {product.occasions.map((occ) => (
+                    <span key={occ} className="chip">
+                      {occ}
+                    </span>
+                  ))}
                 </div>
               </div>
             )}
 
             <div className="stack-row">
-              <AddToCartButton
-                productId={product.id}
-                name={product.name}
-                price={product.price}
-                emoji={product.emoji}
-                bgColor={product.bgColor}
-                vendorId={product.vendorId}
-                vendorName={product.vendor?.name}
-                disabled={isOutOfStock}
-              />
+              <button
+                className="pill btn-primary"
+                style={{
+                  flex: 1,
+                  justifyContent: 'center',
+                  fontSize: '1rem',
+                  padding: '13px 24px',
+                }}
+              >
+                Add to cart
+              </button>
               {product.vendor && (
-                <Link className="pill btn-ghost" href={`/vendors/${product.vendor.id}`} style={{ flexShrink: 0 }}>Visit shop</Link>
+                <Link
+                  className="pill btn-ghost"
+                  href={`/vendors/${product.vendor.id}`}
+                  style={{ flexShrink: 0 }}
+                >
+                  Visit shop
+                </Link>
               )}
             </div>
           </div>
         </div>
 
-        {/* Trust strip */}
         <div className="trust-grid" style={{ marginTop: 24 }}>
-          <div className="trust-card"><span className="trust-icon">🛡️</span><div><div className="trust-title">Buyer protection</div><div className="trust-desc">Covered on every order</div></div></div>
-          <div className="trust-card"><span className="trust-icon">✉️</span><div><div className="trust-title">Tracked shipping</div><div className="trust-desc">Real-time order tracking</div></div></div>
-          <div className="trust-card"><span className="trust-icon">⭐</span><div><div className="trust-title">Verified reviews</div><div className="trust-desc">From real buyers only</div></div></div>
-          <div className="trust-card"><span className="trust-icon">🎨</span><div><div className="trust-title">Handcrafted quality</div><div className="trust-desc">Curated indie artists</div></div></div>
+          <div className="trust-card">
+            <span className="trust-icon">🛡️</span>
+            <div>
+              <div className="trust-title">Buyer protection</div>
+              <div className="trust-desc">Covered on every order</div>
+            </div>
+          </div>
+          <div className="trust-card">
+            <span className="trust-icon">✉️</span>
+            <div>
+              <div className="trust-title">Tracked shipping</div>
+              <div className="trust-desc">Real-time order tracking</div>
+            </div>
+          </div>
+          <div className="trust-card">
+            <span className="trust-icon">⭐</span>
+            <div>
+              <div className="trust-title">Verified reviews</div>
+              <div className="trust-desc">From real buyers only</div>
+            </div>
+          </div>
+          <div className="trust-card">
+            <span className="trust-icon">🎨</span>
+            <div>
+              <div className="trust-title">Handcrafted quality</div>
+              <div className="trust-desc">Curated indie artists</div>
+            </div>
+          </div>
         </div>
 
-        {/* Reviews */}
         {!!product.reviews?.length && (
           <section className="section">
             <div className="section-head">
               <div>
                 <p className="eyebrow">Customer feedback</p>
-                <h2 className="section-title">Product <em>reviews</em></h2>
+                <h2 className="section-title">
+                  Product <em>reviews</em>
+                </h2>
               </div>
-              <span className="chip">{product.reviews.length} review{product.reviews.length !== 1 ? 's' : ''}</span>
+              <span className="chip">
+                {product.reviews.length} review
+                {product.reviews.length !== 1 ? 's' : ''}
+              </span>
             </div>
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-              {product.reviews.map(review => (
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              }}
+            >
+              {product.reviews.map((review) => (
                 <div className="list-item" key={review.id}>
                   <div className="between">
-                    <strong style={{ fontSize: '.9rem' }}>{review.user?.name || 'Anonymous'}</strong>
-                    <span style={{ color: '#f59e0b', fontSize: '.85rem' }}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+                    <strong style={{ fontSize: '.9rem' }}>
+                      {review.user?.name || 'Anonymous'}
+                    </strong>
+                    <span style={{ color: '#f59e0b', fontSize: '.85rem' }}>
+                      {'★'.repeat(review.rating)}
+                      {'☆'.repeat(5 - review.rating)}
+                    </span>
                   </div>
-                  {review.title && <div style={{ marginTop: 8, fontWeight: 700, fontSize: '.9rem' }}>{review.title}</div>}
-                  <p className="subtle" style={{ marginBottom: 0, marginTop: 5, fontSize: '.88rem', lineHeight: 1.55 }}>{review.body}</p>
-                  <div className="muted" style={{ fontSize: '.73rem', marginTop: 8 }}>
-                    {new Date(review.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {review.title && (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        fontWeight: 700,
+                        fontSize: '.9rem',
+                      }}
+                    >
+                      {review.title}
+                    </div>
+                  )}
+                  <p
+                    className="subtle"
+                    style={{
+                      marginBottom: 0,
+                      marginTop: 5,
+                      fontSize: '.88rem',
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    {review.body}
+                  </p>
+                  <div
+                    className="muted"
+                    style={{ fontSize: '.73rem', marginTop: 8 }}
+                  >
+                    {new Date(review.createdAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
                   </div>
                 </div>
               ))}
