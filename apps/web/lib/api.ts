@@ -115,7 +115,7 @@ export const api = {
   getMyOrders() {
     return request<Order[]>('/orders/my');
   },
-  checkout(items: { productId: string; qty: number }[], shippingAddress: Record<string, string> = {}) {
+  checkout(items: { productId: string; qty: number; size?: string }[], shippingAddress: Record<string, string> = {}) {
     return request<Order>('/orders', { method: 'POST', body: JSON.stringify({ items, shippingAddress }) });
   },
   // Admin

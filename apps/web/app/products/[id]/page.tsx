@@ -1,8 +1,21 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import { AddToCartSection } from '@/components/AddToCartSection';
 import { mapProduct, mapReview, supabaseAdmin } from '@/lib/route-helpers';
 import type { Product, Review, VendorSummary } from '@/lib/types';
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const { data } = await supabaseAdmin.from('products').select('name, description, emoji, bg_color').eq('id', id).single();
+  if (!data) return { title: 'Product | NailHaus' };
+  const desc = data.description?.slice(0, 155) || `Shop ${data.name} press-on nail set on NailHaus.`;
+  return {
+    title: `${data.emoji} ${data.name} | NailHaus`,
+    description: desc,
+    openGraph: { title: `${data.emoji} ${data.name}`, description: desc, siteName: 'NailHaus' },
+  };
+}
 
 type ProductDetail = Product & {
   reviews: Review[];

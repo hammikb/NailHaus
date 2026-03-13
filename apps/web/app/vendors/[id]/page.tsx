@@ -1,8 +1,21 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import { ProductCard } from '@/components/ProductCard';
 import { supabaseAdmin, mapVendor, mapProduct, mapReview } from '@/lib/route-helpers';
 import type { VendorDetail, Product } from '@/lib/types';
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const { data } = await supabaseAdmin.from('vendors').select('name, tagline, emoji').eq('id', id).single();
+  if (!data) return { title: 'Vendor | NailHaus' };
+  const desc = data.tagline || `Shop handcrafted press-on nail sets from ${data.name} on NailHaus.`;
+  return {
+    title: `${data.emoji} ${data.name} | NailHaus`,
+    description: desc,
+    openGraph: { title: `${data.emoji} ${data.name}`, description: desc, siteName: 'NailHaus' },
+  };
+}
 
 type MappedReview = {
   id: string; rating: number; title?: string; body: string; createdAt: string;

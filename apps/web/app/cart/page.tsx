@@ -25,7 +25,7 @@ export default function CartPage() {
     setPlacing(true);
     setError('');
     try {
-      await api.checkout(items.map((item) => ({ productId: item.productId, qty: item.qty })));
+      await api.checkout(items.map((item) => ({ productId: item.productId, qty: item.qty, size: item.size })));
       clear();
       setSuccess('Order placed successfully!');
     } catch (e) {

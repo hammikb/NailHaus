@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   if (availability === 'made_to_order') query = query.eq('availability', 'made_to_order');
   if (occasion) query = query.contains('occasions', [occasion]);
   if (search) {
-    query = query.or(`name.ilike.%${search}%,style.ilike.%${search}%,shape.ilike.%${search}%`);
+    query = query.or(`name.ilike.%${search}%,style.ilike.%${search}%,shape.ilike.%${search}%,description.ilike.%${search}%`);
   }
 
   switch (sort) {
@@ -115,8 +115,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabaseAdmin.from('products').insert(product).select().single();
   if (error) return err(error.message, 500);
 
-  await supabaseAdmin.from('vendors').update({ total_products: supabaseAdmin.rpc('increment', { x: 1 }) }).eq('id', vendor.id);
-
-  const { data: vendorRow } = await supabaseAdmin.from('vendors').select('id, name, emoji, bg_color').eq('id', vendor.id).single();
+  const { data: vendorRow } = await supabaseAdmin.from('vendors').select('id, name, emoji, bg_color, total_products').eq('id', vendor.id).single();
+  await supabaseAdmin.from('vendors').update({ total_products: (vendorRow?.total_products || 0) + 1 }).eq('id', vendor.id);
   return NextResponse.json(mapProduct(data, vendorRow), { status: 201 });
 }
