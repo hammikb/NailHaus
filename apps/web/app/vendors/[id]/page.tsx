@@ -1,178 +1,238 @@
-// apps/web/app/vendors/[id]/page.tsx
 import Link from 'next/link';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
+import { ProductCard } from '@/components/ProductCard';
+import { supabaseAdmin, mapVendor, mapProduct, mapReview } from '@/lib/route-helpers';
+import type { VendorDetail, Product } from '@/lib/types';
 
-type VendorProduct = {
-  id: string;
-  name: string;
-  price: number;
-  originalPrice?: number | null;
-  emoji?: string;
-  bgColor?: string;
-  badge?: string | null;
-  rating?: number;
-  reviewCount?: number;
+type MappedReview = {
+  id: string; rating: number; title?: string; body: string; createdAt: string;
+  user?: { name: string } | null;
+  product?: { id: string; name: string } | null;
 };
 
-type Vendor = {
-  id: string;
-  name: string;
-  tagline?: string;
-  description?: string;
-  emoji?: string;
-  bgColor?: string;
-  tags?: string[];
-  verified?: boolean;
-  rating?: number;
-  totalSales?: number;
-  totalProducts?: number;
-  announcement?: string;
-  products?: VendorProduct[];
+const SOCIAL_ICONS: Record<string, string> = {
+  instagram: '📸', tiktok: '🎵', pinterest: '📌',
+  twitter: '🐦', facebook: '👤', youtube: '▶️', website: '🌐',
 };
 
-async function getVendor(id: string): Promise<Vendor> {
-  const h = await headers();
-  const host = h.get('x-forwarded-host') ?? h.get('host');
-  const proto = h.get('x-forwarded-proto') ?? 'https';
-
-  if (!host) throw new Error('Missing host header');
-
-  const res = await fetch(`${proto}://${host}/api/vendors/${id}`, {
-    cache: 'no-store',
-  });
-
-  if (res.status === 404) notFound();
-
-  const data = await res.json().catch(() => null);
-
-  if (!res.ok) {
-    throw new Error(data?.error || `Failed to load vendor ${id}`);
-  }
-
-  return data as Vendor;
-}
-
-export default async function VendorPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function VendorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const vendor = await getVendor(id);
+
+  const { data: vendorRow, error } = await supabaseAdmin
+    .from('vendors')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !vendorRow) notFound();
+
+  const [{ data: products }, { data: reviews }] = await Promise.all([
+    supabaseAdmin
+      .from('products')
+      .select('*')
+      .eq('vendor_id', id)
+      .eq('hidden', false)
+      .order('created_at', { ascending: false }),
+    supabaseAdmin
+      .from('reviews')
+      .select('*, profiles!user_id(name), products!product_id(id, name)')
+      .eq('vendor_id', id)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  const vendorMin = { id: vendorRow.id, name: vendorRow.name, emoji: vendorRow.emoji, bg_color: vendorRow.bg_color };
+  const vendor = {
+    ...mapVendor(vendorRow),
+    products: (products || []).map((p: Record<string, unknown>) => mapProduct(p, vendorMin)) as unknown as Product[],
+    reviews: (reviews || []).map((r: Record<string, unknown>) => {
+      const profile = r.profiles as { name: string } | null;
+      const product = r.products as { id: string; name: string } | null;
+      return mapReview(r, profile, product);
+    }) as unknown as MappedReview[],
+  } as unknown as Omit<VendorDetail, 'reviews' | 'products'> & { products: Product[]; reviews: MappedReview[] };
+
+  const memberSince = vendorRow.created_at
+    ? new Date(vendorRow.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : null;
+
+  const socialEntries = Object.entries(vendor.socialLinks || {}).filter(([, v]) => v);
 
   return (
     <main className="page-shell">
       <div className="container">
-        <div className="panel" style={{ padding: 32, marginBottom: 24 }}>
-          <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-            <div
-              style={{
-                width: 84,
-                height: 84,
-                borderRadius: 24,
-                display: 'grid',
-                placeItems: 'center',
-                fontSize: '2rem',
-                background: vendor.bgColor || '#fde8e8',
-              }}
-            >
-              {vendor.emoji || '💅'}
-            </div>
 
-            <div>
-              <h1 style={{ margin: 0 }}>{vendor.name}</h1>
-              {vendor.tagline ? (
-                <p className="subtle" style={{ marginTop: 8 }}>
-                  {vendor.tagline}
-                </p>
-              ) : null}
-
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-                {vendor.verified ? <span className="chip">Verified</span> : null}
-                {vendor.rating ? <span className="chip">⭐ {vendor.rating}</span> : null}
-                {typeof vendor.totalSales === 'number' ? (
-                  <span className="chip">{vendor.totalSales} sales</span>
-                ) : null}
-                {typeof vendor.totalProducts === 'number' ? (
-                  <span className="chip">{vendor.totalProducts} products</span>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          {vendor.announcement ? (
-            <div className="panel" style={{ marginTop: 20, padding: 16 }}>
-              <strong>Shop announcement</strong>
-              <p className="subtle" style={{ marginBottom: 0, marginTop: 8 }}>
-                {vendor.announcement}
-              </p>
-            </div>
-          ) : null}
-
-          {vendor.description ? (
-            <p className="subtle" style={{ marginTop: 20 }}>
-              {vendor.description}
-            </p>
-          ) : null}
-
-          {!!vendor.tags?.length && (
-            <div className="tags" style={{ marginTop: 16 }}>
-              {vendor.tags.map((tag) => (
-                <span key={tag} className="tag">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
+        <div className="breadcrumb">
+          <Link href="/vendors">Vendors</Link>
+          <span>/</span>
+          <span>{vendor.name}</span>
         </div>
 
-        <section className="section">
-          <div className="section-head">
-            <div>
-              <p className="eyebrow">Shop products</p>
-              <h2 className="section-title">
-                Browse <em>{vendor.name}</em>
-              </h2>
+        {vendor.announcement && (
+          <div className="announcement-bar">
+            <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>📣</span>
+            <span>{vendor.announcement}</span>
+          </div>
+        )}
+
+        <div className="vendor-hero" style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
+            <div style={{
+              width: 110, height: 110, borderRadius: 28, display: 'grid', placeItems: 'center',
+              fontSize: '3.2rem', background: vendor.bgColor, flexShrink: 0,
+              boxShadow: '0 8px 24px rgba(0,0,0,.1)', border: '3px solid rgba(255,255,255,.7)',
+            }}>
+              {vendor.emoji}
+            </div>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                <p className="eyebrow" style={{ margin: 0 }}>Vendor storefront</p>
+                {vendor.verified && <span className="verified-badge">✓ Verified vendor</span>}
+              </div>
+              <h1 className="section-title" style={{ marginTop: 0, marginBottom: 6, fontSize: '2.2rem' }}>{vendor.name}</h1>
+              {vendor.tagline && (
+                <p className="subtle" style={{ margin: '0 0 10px', fontSize: '1rem', fontStyle: 'italic' }}>{vendor.tagline}</p>
+              )}
+              <p className="subtle" style={{ maxWidth: 600, margin: '0 0 16px', lineHeight: 1.65 }}>
+                {vendor.description || 'Independent press-on nail artist on NailHaus.'}
+              </p>
+              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: '.875rem', marginBottom: socialEntries.length ? 14 : 0 }}>
+                {(vendor.rating ?? 0) > 0 && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ color: '#f59e0b' }}>{'★'.repeat(Math.round(vendor.rating!))}</span>
+                    <strong>{Number(vendor.rating).toFixed(1)}</strong>
+                  </span>
+                )}
+                {(vendor.totalSales ?? 0) > 0 && (
+                  <span><strong>{vendor.totalSales}</strong> <span className="muted">sales</span></span>
+                )}
+                {(vendor.totalProducts ?? 0) > 0 && (
+                  <span><strong>{vendor.totalProducts}</strong> <span className="muted">listings</span></span>
+                )}
+                {memberSince && <span className="muted">Member since {memberSince}</span>}
+              </div>
+              {socialEntries.length > 0 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                  {socialEntries.map(([platform, url]) => (
+                    <a key={platform} href={url as string} target="_blank" rel="noopener noreferrer" className="social-link">
+                      {SOCIAL_ICONS[platform] || '🔗'} {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
+        </div>
 
-          <div className="grid grid-products">
-            {vendor.products?.map((product) => (
-              <Link
-                key={product.id}
-                href={`/products/${product.id}`}
-                className="product-card"
-                style={{ textDecoration: 'none' }}
-              >
-                <div
-                  className="product-media"
-                  style={{ background: product.bgColor || '#fde8e8' }}
+        <div className="trust-grid" style={{ marginBottom: 28 }}>
+          {vendor.verified && (
+            <div className="trust-card" style={{ background: 'var(--success-bg)', borderColor: '#bbf7d0' }}>
+              <span className="trust-icon">🛡️</span>
+              <div>
+                <div className="trust-title" style={{ color: 'var(--success)' }}>Verified seller</div>
+                <div className="trust-desc">Identity &amp; quality confirmed</div>
+              </div>
+            </div>
+          )}
+          <div className="trust-card" style={{ background: 'var(--info-bg)', borderColor: '#bfdbfe' }}>
+            <span className="trust-icon">🔒</span>
+            <div>
+              <div className="trust-title" style={{ color: 'var(--info)' }}>Secure checkout</div>
+              <div className="trust-desc">Protected by NailHaus</div>
+            </div>
+          </div>
+          <div className="trust-card" style={{ background: '#fdf4ff', borderColor: '#e9d5ff' }}>
+            <span className="trust-icon">💌</span>
+            <div>
+              <div className="trust-title" style={{ color: '#7e22ce' }}>Buyer protection</div>
+              <div className="trust-desc">Covered on every order</div>
+            </div>
+          </div>
+          <div className="trust-card">
+            <span className="trust-icon">✉️</span>
+            <div>
+              <div className="trust-title">Tracked shipping</div>
+              <div className="trust-desc">Real-time tracking</div>
+            </div>
+          </div>
+        </div>
+
+        {vendor.collections && vendor.collections.length > 0 && (
+          <div style={{ marginBottom: 28 }}>
+            <p className="eyebrow" style={{ marginBottom: 10 }}>Collections</p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {vendor.collections.map(col => (
+                <Link
+                  key={col.id}
+                  href={'/shop?vendorId=' + vendor.id + '&collectionId=' + col.id}
+                  className="chip"
+                  style={{ padding: '8px 18px', fontSize: '.88rem', fontWeight: 700 }}
                 >
-                  {product.badge ? (
-                    <span className={`badge badge-${product.badge}`}>
-                      {product.badge}
-                    </span>
-                  ) : null}
-                  <span className="product-emoji">{product.emoji || '💅'}</span>
-                </div>
+                  {col.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
-                <div className="product-body">
-                  <h3>{product.name}</h3>
-                  <div className="price-row">
-                    <span className="price">${product.price}</span>
-                    {product.originalPrice ? (
-                      <span className="price-strike">${product.originalPrice}</span>
-                    ) : null}
-                  </div>
-                  <div className="muted" style={{ fontSize: '.82rem' }}>
-                    ⭐ {product.rating || 0} · {product.reviewCount || 0} reviews
-                  </div>
-                </div>
-              </Link>
+        <div className="section-head">
+          <div>
+            <p className="eyebrow">Products</p>
+            <h2 className="section-title">Available <em>sets</em></h2>
+          </div>
+          <span className="chip">{vendor.products?.length || 0} listings</span>
+        </div>
+
+        {vendor.products?.length ? (
+          <div className="grid product-grid">
+            {vendor.products.map(product => (
+              <ProductCard key={product.id} product={product} />
             ))}
           </div>
-        </section>
+        ) : (
+          <div className="panel empty-state">
+            <span className="empty-icon">💅</span>
+            <p>No products listed yet.</p>
+          </div>
+        )}
+
+        {vendor.reviews?.length ? (
+          <section className="section">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Social proof</p>
+                <h2 className="section-title">Customer <em>reviews</em></h2>
+              </div>
+              <span className="chip">{vendor.reviews.length} review{vendor.reviews.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+              {vendor.reviews.slice(0, 6).map(review => (
+                <div key={review.id} className="list-item">
+                  <div className="between">
+                    <strong style={{ fontSize: '.9rem' }}>{review.user?.name || 'Anonymous'}</strong>
+                    <span style={{ color: '#f59e0b', fontSize: '.85rem' }}>
+                      {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}
+                    </span>
+                  </div>
+                  {review.product && (
+                    <div className="muted" style={{ fontSize: '.76rem', marginTop: 4 }}>
+                      Re: {review.product.name}
+                    </div>
+                  )}
+                  {review.title && (
+                    <div style={{ marginTop: 8, fontWeight: 700, fontSize: '.9rem' }}>{review.title}</div>
+                  )}
+                  <p className="subtle" style={{ marginBottom: 0, marginTop: 5, fontSize: '.88rem' }}>
+                    {review.body}
+                  </p>
+                  <div className="muted" style={{ fontSize: '.73rem', marginTop: 8 }}>
+                    {new Date(review.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
       </div>
     </main>
   );
