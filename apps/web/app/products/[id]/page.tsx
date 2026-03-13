@@ -5,6 +5,7 @@ import { AddToCartSection } from '@/components/AddToCartSection';
 import { ReviewForm } from '@/components/ReviewForm';
 import { WishlistButton } from '@/components/WishlistButton';
 import { ProductGallery } from '@/components/ProductGallery';
+import { ProductCard } from '@/components/ProductCard';
 import { mapProduct, mapReview, supabaseAdmin } from '@/lib/route-helpers';
 import type { Product, Review, VendorSummary } from '@/lib/types';
 
@@ -74,6 +75,35 @@ async function getProduct(id: string): Promise<ProductDetail> {
   };
 }
 
+async function getRelatedProducts(productId: string, vendorId: string, style: string, shape: string) {
+  // More from vendor (exclude current product)
+  const { data: fromVendor } = await supabaseAdmin
+    .from('products')
+    .select('*, vendors!vendor_id(id, name, emoji, bg_color)')
+    .eq('vendor_id', vendorId)
+    .eq('hidden', false)
+    .neq('id', productId)
+    .order('review_count', { ascending: false })
+    .limit(4);
+
+  // Similar style (different vendor, exclude current)
+  const { data: similar } = await supabaseAdmin
+    .from('products')
+    .select('*, vendors!vendor_id(id, name, emoji, bg_color)')
+    .eq('style', style)
+    .eq('shape', shape)
+    .eq('hidden', false)
+    .neq('id', productId)
+    .neq('vendor_id', vendorId)
+    .order('review_count', { ascending: false })
+    .limit(4);
+
+  return {
+    fromVendor: (fromVendor || []).map((p: Record<string, unknown>) => mapProduct(p, p.vendors as Record<string, unknown> | null)) as unknown as Product[],
+    similar: (similar || []).map((p: Record<string, unknown>) => mapProduct(p, p.vendors as Record<string, unknown> | null)) as unknown as Product[],
+  };
+}
+
 export default async function ProductDetailPage({
   params,
 }: {
@@ -81,6 +111,7 @@ export default async function ProductDetailPage({
 }) {
   const { id } = await params;
   const product = await getProduct(id);
+  const related = await getRelatedProducts(product.id, product.vendorId, product.style, product.shape);
 
   const salePct = product.originalPrice
     ? Math.round((1 - product.price / product.originalPrice) * 100)
@@ -425,6 +456,43 @@ export default async function ProductDetailPage({
                   </div>
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+        {/* More from this vendor */}
+        {related.fromVendor.length > 0 && (
+          <section className="section">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Same artist</p>
+                <h2 className="section-title">More from <em>{product.vendor?.name || 'this vendor'}</em></h2>
+              </div>
+              {product.vendor && (
+                <Link href={`/vendors/${product.vendor.id}`} className="pill btn-ghost btn-sm">
+                  View all →
+                </Link>
+              )}
+            </div>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+              {related.fromVendor.map(p => <ProductCard key={p.id} product={p} />)}
+            </div>
+          </section>
+        )}
+
+        {/* Similar style */}
+        {related.similar.length > 0 && (
+          <section className="section">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Similar style</p>
+                <h2 className="section-title">You might also <em>love these</em></h2>
+              </div>
+              <Link href={`/shop?style=${product.style}&shape=${product.shape}`} className="pill btn-ghost btn-sm">
+                Browse all →
+              </Link>
+            </div>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+              {related.similar.map(p => <ProductCard key={p.id} product={p} />)}
             </div>
           </section>
         )}

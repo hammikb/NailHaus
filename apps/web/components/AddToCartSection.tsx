@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useCart } from './CartProvider';
+import { NailSizingGuide } from './NailSizingGuide';
 
 interface ProductForCart {
   id: string;
@@ -31,6 +32,8 @@ export function AddToCartSection({ product }: { product: ProductForCart }) {
   const { addItem } = useCart();
   const [selectedSize, setSelectedSize] = useState('');
   const [added, setAdded] = useState(false);
+  const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistStatus, setWaitlistStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
 
   const sizeList = parseSizes(product.sizes);
   const hasSizes = sizeList.length > 0;
@@ -79,8 +82,24 @@ export function AddToCartSection({ product }: { product: ProductForCart }) {
     setTimeout(() => setAdded(false), 2000);
   }
 
+  async function handleWaitlist() {
+    if (!waitlistEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(waitlistEmail)) return;
+    setWaitlistStatus('loading');
+    try {
+      const res = await fetch(`/api/products/${product.id}/waitlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: waitlistEmail }),
+      });
+      setWaitlistStatus(res.ok ? 'done' : 'error');
+    } catch {
+      setWaitlistStatus('error');
+    }
+  }
+
   return (
     <>
+      {hasSizes && <NailSizingGuide />}
       {hasSizes && (
         <div style={{ marginBottom: 20 }}>
           <div
@@ -209,6 +228,44 @@ export function AddToCartSection({ product }: { product: ProductForCart }) {
           </Link>
         )}
       </div>
+
+      {/* Back in stock notification */}
+      {isOutOfStock && !isMadeToOrder && (
+        <div style={{ marginTop: 14, padding: '14px 16px', background: '#fef9ff', borderRadius: 12, border: '1px solid #f0e0eb' }}>
+          {waitlistStatus === 'done' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#16a34a', fontWeight: 700, fontSize: '.88rem' }}>
+              <span>✓</span> We&apos;ll email you when this comes back in stock!
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: '.82rem', fontWeight: 700, color: '#9a4a7a', marginBottom: 8 }}>
+                🔔 Notify me when back in stock
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={waitlistEmail}
+                  onChange={e => setWaitlistEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleWaitlist()}
+                  style={{ flex: 1, padding: '8px 12px', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: '.85rem', minWidth: 0 }}
+                />
+                <button
+                  type="button"
+                  onClick={handleWaitlist}
+                  disabled={waitlistStatus === 'loading'}
+                  style={{ padding: '8px 16px', borderRadius: 10, background: '#c45990', color: '#fff', border: 'none', fontWeight: 700, fontSize: '.85rem', cursor: 'pointer', flexShrink: 0 }}
+                >
+                  {waitlistStatus === 'loading' ? '…' : 'Notify me'}
+                </button>
+              </div>
+              {waitlistStatus === 'error' && (
+                <div style={{ fontSize: '.78rem', color: 'var(--danger)', marginTop: 6 }}>Something went wrong. Please try again.</div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </>
   );
 }

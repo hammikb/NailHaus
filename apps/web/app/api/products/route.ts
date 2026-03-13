@@ -32,6 +32,8 @@ export async function GET(req: NextRequest) {
   const collectionId = searchParams.get('collectionId');
   const badge = searchParams.get('badge');
   const limit = parseInt(searchParams.get('limit') || '0');
+  const minPrice = searchParams.get('minPrice');
+  const maxPrice = searchParams.get('maxPrice');
 
   let query = supabaseAdmin.from('products').select('*, vendors!vendor_id(id, name, emoji, bg_color)').eq('hidden', false);
 
@@ -46,6 +48,8 @@ export async function GET(req: NextRequest) {
   if (search) {
     query = query.or(`name.ilike.%${search}%,style.ilike.%${search}%,shape.ilike.%${search}%,description.ilike.%${search}%`);
   }
+  if (minPrice) query = query.gte('price', parseFloat(minPrice));
+  if (maxPrice) query = query.lte('price', parseFloat(maxPrice));
 
   switch (sort) {
     case 'price_asc': query = query.order('price', { ascending: true }); break;

@@ -24,10 +24,12 @@ export default function ShopPage() {
   const [style, setStyle] = useState('');
   const [occasion, setOccasion] = useState('');
   const [availability, setAvailability] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
   const [sort, setSort] = useState('popular');
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback((q: { search?: string; shape?: string; style?: string; occasion?: string; availability?: string; sort?: string }) => {
+  const load = useCallback((q: { search?: string; shape?: string; style?: string; occasion?: string; availability?: string; sort?: string; minPrice?: string; maxPrice?: string }) => {
     setLoading(true);
     api.getProducts({
       search: q.search || undefined,
@@ -36,6 +38,8 @@ export default function ShopPage() {
       occasion: q.occasion || undefined,
       availability: q.availability || undefined,
       sort: q.sort || 'popular',
+      minPrice: q.minPrice || undefined,
+      maxPrice: q.maxPrice || undefined,
     }).then(setProducts).catch(() => setProducts([])).finally(() => setLoading(false));
   }, []);
 
@@ -45,7 +49,7 @@ export default function ShopPage() {
   }, []);
 
   function applyFilters(overrides: Record<string, string> = {}) {
-    const q = { search, shape, style, occasion, availability, sort, ...overrides };
+    const q = { search, shape, style, occasion, availability, sort, minPrice, maxPrice, ...overrides };
     load(q);
   }
 
@@ -66,7 +70,7 @@ export default function ShopPage() {
     applyFilters({ [key]: val });
   }
 
-  const activeCount = [shape, style, occasion, availability].filter(Boolean).length;
+  const activeCount = [shape, style, occasion, availability, minPrice, maxPrice].filter(Boolean).length;
 
   return (
     <main className="page-shell">
@@ -79,7 +83,7 @@ export default function ShopPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {activeCount > 0 && (
               <button className="pill btn-ghost btn-sm" onClick={() => {
-                setShape(''); setStyle(''); setOccasion(''); setAvailability(''); setSearch('');
+                setShape(''); setStyle(''); setOccasion(''); setAvailability(''); setSearch(''); setMinPrice(''); setMaxPrice('');
                 load({ sort });
               }}>
                 Clear {activeCount} filter{activeCount > 1 ? 's' : ''}
@@ -159,6 +163,36 @@ export default function ShopPage() {
               <button className={`filter-pill${availability === 'made_to_order' ? ' active' : ''}`} onClick={() => toggle(availability, setAvailability, 'made_to_order', 'availability')}>Made to order</button>
             </div>
           </div>
+        </div>
+
+        {/* Price range */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 24 }}>
+          <span style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>Price</span>
+          <input
+            type="number"
+            min="0"
+            placeholder="Min $"
+            value={minPrice}
+            style={{ width: 80, padding: '6px 10px', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: '.85rem' }}
+            onChange={e => { setMinPrice(e.target.value); applyFilters({ minPrice: e.target.value }); }}
+          />
+          <span className="muted" style={{ fontSize: '.85rem' }}>–</span>
+          <input
+            type="number"
+            min="0"
+            placeholder="Max $"
+            value={maxPrice}
+            style={{ width: 80, padding: '6px 10px', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: '.85rem' }}
+            onChange={e => { setMaxPrice(e.target.value); applyFilters({ maxPrice: e.target.value }); }}
+          />
+          {(minPrice || maxPrice) && (
+            <button
+              className="pill btn-ghost btn-sm"
+              onClick={() => { setMinPrice(''); setMaxPrice(''); applyFilters({ minPrice: '', maxPrice: '' }); }}
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {/* Results */}
