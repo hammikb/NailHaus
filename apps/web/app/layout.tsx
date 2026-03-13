@@ -4,6 +4,7 @@ import { CartProvider } from '@/components/CartProvider';
 import { CartDrawer } from '@/components/CartDrawer';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { Analytics } from "@vercel/analytics/next"
 
 export const metadata = {
   title: 'NailHaus — The Press-On Nail Marketplace',
