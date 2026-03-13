@@ -93,8 +93,11 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
               width: 110, height: 110, borderRadius: 28, display: 'grid', placeItems: 'center',
               fontSize: '3.2rem', background: vendor.bgColor, flexShrink: 0,
               boxShadow: '0 8px 24px rgba(0,0,0,.1)', border: '3px solid rgba(255,255,255,.7)',
+              overflow: 'hidden',
             }}>
-              {vendor.emoji}
+              {vendor.bannerUrl
+                ? <img src={vendor.bannerUrl} alt={vendor.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : vendor.emoji}
             </div>
             <div style={{ flex: 1, minWidth: 220 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>

@@ -26,6 +26,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const path = `products/${id}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
+  // Delete any existing files for this product (handles extension changes + clears CDN cache)
+  const { data: existing } = await supabaseAdmin.storage.from('product-images').list('products', { search: id });
+  if (existing?.length) {
+    await supabaseAdmin.storage.from('product-images').remove(existing.map(f => `products/${f.name}`));
+  }
+
   const { error: uploadError } = await supabaseAdmin.storage
     .from('product-images')
     .upload(path, buffer, { contentType: file.type, upsert: true });
@@ -33,7 +39,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (uploadError) return err(uploadError.message, 500);
 
   const { data: urlData } = supabaseAdmin.storage.from('product-images').getPublicUrl(path);
-  const imageUrl = urlData.publicUrl;
+  // Append cache-buster so browsers/CDN always serve the latest version
+  const imageUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
   await supabaseAdmin.from('products').update({ image_url: imageUrl }).eq('id', id);
 

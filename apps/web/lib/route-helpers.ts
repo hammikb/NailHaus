@@ -72,6 +72,7 @@ export function mapVendor(v: Record<string, unknown>) {
     announcement: v.announcement || '',
     collections: v.collections || [],
     createdAt: v.created_at,
+    bannerUrl: v.banner_url || null,
   };
 }
 

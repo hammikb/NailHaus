@@ -18,6 +18,7 @@ export interface VendorSummary {
   totalProducts?: number;
   totalSales?: number;
   createdAt?: string;
+  bannerUrl?: string | null;
 }
 
 export interface PayoutWeek {

@@ -257,6 +257,9 @@ export function VendorDashboardClient() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState('');
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerUploadError, setBannerUploadError] = useState('');
 
   const loadDashboard = useCallback(() => {
     api.vendorDashboard().then(d => {
@@ -269,6 +272,7 @@ export function VendorDashboardClient() {
         instagram: v.socialLinks?.instagram || '', tiktok: v.socialLinks?.tiktok || '',
         pinterest: v.socialLinks?.pinterest || '', website: v.socialLinks?.website || '',
       });
+      setBannerUrl(v.bannerUrl || null);
     }).catch(err => setError(err.message));
   }, []);
 
@@ -396,6 +400,26 @@ export function VendorDashboardClient() {
     const reader = new FileReader();
     reader.onload = ev => setImportText(String(ev.target?.result || ''));
     reader.readAsText(f);
+  }
+
+  /* Banner image upload */
+  async function uploadBanner(file: File) {
+    setBannerUploading(true); setBannerUploadError('');
+    try {
+      const token = localStorage.getItem('nh_tok');
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/vendors/me/image', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Upload failed');
+      setBannerUrl(json.bannerUrl);
+    } catch (err: unknown) {
+      setBannerUploadError(err instanceof Error ? err.message : 'Upload failed');
+    } finally { setBannerUploading(false); }
   }
 
   /* Profile save */
@@ -1018,13 +1042,39 @@ export function VendorDashboardClient() {
 
           {/* Live preview */}
           <div className="panel" style={{ padding: 20, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 72, height: 72, borderRadius: 20, background: profileForm.bgColor, display: 'grid', placeItems: 'center', fontSize: '2rem', flexShrink: 0, transition: 'all .2s' }}>
-              {profileForm.emoji}
+            <div style={{ width: 72, height: 72, borderRadius: 20, background: profileForm.bgColor, display: 'grid', placeItems: 'center', fontSize: '2rem', flexShrink: 0, transition: 'all .2s', overflow: 'hidden' }}>
+              {bannerUrl
+                ? <img src={bannerUrl} alt="shop banner" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : profileForm.emoji}
             </div>
             <div>
               <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{profileForm.name || 'Your shop name'}</div>
               <div className="muted" style={{ fontSize: '.88rem' }}>{profileForm.tagline || 'Your tagline'}</div>
             </div>
+          </div>
+
+          {/* Shop banner / logo upload */}
+          <div className="panel" style={{ padding: 20, marginBottom: 20 }}>
+            <div className="muted" style={{ fontSize: '.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 14 }}>Shop photo / banner</div>
+            {bannerUrl && (
+              <div style={{ marginBottom: 12, borderRadius: 12, overflow: 'hidden', maxHeight: 160, background: '#f5f0f5' }}>
+                <img src={bannerUrl} alt="shop banner" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} />
+              </div>
+            )}
+            <label style={{ display: 'inline-block', cursor: 'pointer' }}>
+              <span className="pill btn-ghost btn-sm" style={{ pointerEvents: 'none' }}>
+                {bannerUploading ? 'Uploading…' : bannerUrl ? '🔄 Replace photo' : '📷 Upload photo'}
+              </span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                style={{ display: 'none' }}
+                disabled={bannerUploading}
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadBanner(f); e.target.value = ''; }}
+              />
+            </label>
+            {bannerUploadError && <div className="error" style={{ marginTop: 8, fontSize: '.85rem' }}>{bannerUploadError}</div>}
+            <div className="muted" style={{ fontSize: '.75rem', marginTop: 8 }}>JPG, PNG, WebP or GIF · max 5 MB · Shown as your shop avatar and banner</div>
           </div>
 
           <div className="panel" style={{ padding: 28 }}>
