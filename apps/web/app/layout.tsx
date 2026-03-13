@@ -5,6 +5,8 @@ import { CartDrawer } from '@/components/CartDrawer';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from '@vercel/speed-insights/next';
+
 
 export const metadata = {
   title: 'NailHaus — The Press-On Nail Marketplace',
@@ -24,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </CartProvider>
         </AuthProvider>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
