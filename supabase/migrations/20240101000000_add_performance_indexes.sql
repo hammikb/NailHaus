@@ -68,10 +68,6 @@ CREATE INDEX IF NOT EXISTS idx_order_items_vendor_id
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id
   ON order_items (order_id);
 
--- ─── wishlist ─────────────────────────────────────────────────────────────────
-CREATE INDEX IF NOT EXISTS idx_wishlist_user_id
-  ON wishlist (user_id);
-
 -- ─── vendors ──────────────────────────────────────────────────────────────────
 -- Auth lookups (vendor by user_id)
 CREATE INDEX IF NOT EXISTS idx_vendors_user_id

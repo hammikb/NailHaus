@@ -17,26 +17,55 @@ const SORTS = [
   { value: 'price_desc', label: 'Price ↓' },
 ];
 
+/* ─── Dropdown component ──────────────────────────────── */
+function FilterDropdown({
+  name, label, active, open, onToggle, children,
+}: {
+  name: string;
+  label: string;
+  active: boolean;
+  open: boolean;
+  onToggle: (name: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fdd-wrap">
+      <button
+        className={`fdd-trigger${active ? ' fdd-active' : ''}${open ? ' fdd-open' : ''}`}
+        onClick={() => onToggle(name)}
+        aria-expanded={open}
+      >
+        {label}
+        <span className="fdd-chevron">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && <div className="fdd-menu">{children}</div>}
+    </div>
+  );
+}
+
+/* ─── Skeleton ────────────────────────────────────────── */
+const Skeleton = () => (
+  <main className="page-shell">
+    <div className="container">
+      <div className="grid product-grid" style={{ marginTop: 32 }}>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="card" style={{ overflow: 'hidden' }}>
+            <div className="shimmer" style={{ height: 210 }} />
+            <div style={{ padding: '18px 20px' }}>
+              <div className="shimmer" style={{ height: 14, marginBottom: 8, width: '60%' }} />
+              <div className="shimmer" style={{ height: 18, marginBottom: 12 }} />
+              <div className="shimmer" style={{ height: 12, width: '80%' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </main>
+);
+
 export default function ShopPage() {
   return (
-    <Suspense fallback={
-      <main className="page-shell">
-        <div className="container">
-          <div className="grid product-grid" style={{ marginTop: 32 }}>
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="card" style={{ overflow: 'hidden' }}>
-                <div className="shimmer" style={{ height: 210 }} />
-                <div style={{ padding: '18px 20px' }}>
-                  <div className="shimmer" style={{ height: 14, marginBottom: 8, width: '60%' }} />
-                  <div className="shimmer" style={{ height: 18, marginBottom: 12 }} />
-                  <div className="shimmer" style={{ height: 12, width: '80%' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </main>
-    }>
+    <Suspense fallback={<Skeleton />}>
       <ShopContent />
     </Suspense>
   );
@@ -57,19 +86,31 @@ function ShopContent() {
   const [minPrice, setMinPrice] = useState(() => searchParams.get('minPrice') ?? '');
   const [maxPrice, setMaxPrice] = useState(() => searchParams.get('maxPrice') ?? '');
   const [sort, setSort] = useState(() => searchParams.get('sort') ?? 'popular');
+  const [openFilter, setOpenFilter] = useState<string | null>(null);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const priceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (!(e.target as Element).closest('.fdd-wrap')) setOpenFilter(null);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  function toggleDropdown(name: string) {
+    setOpenFilter(f => f === name ? null : name);
+  }
 
   function pushParams(overrides: Record<string, string> = {}) {
     const current = { search, shape, style, occasion, availability, sort, minPrice, maxPrice };
     const merged = { ...current, ...overrides };
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(merged)) {
-      if (v && v !== 'popular') params.set(k, v);
+      if (v && !(k === 'sort' && v === 'popular')) params.set(k, v);
     }
-    // Always preserve sort if not default
-    if (merged.sort && merged.sort !== 'popular') params.set('sort', merged.sort);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
@@ -114,15 +155,11 @@ function ShopContent() {
     priceTimer.current = setTimeout(() => applyFilters({ [key]: val }), 500);
   }
 
-  function toggle(getter: string, setter: (v: string) => void, val: string, key: string) {
-    const next = getter === val ? '' : val;
+  function pick(setter: (v: string) => void, current: string, val: string, key: string) {
+    const next = current === val ? '' : val;
     setter(next);
     applyFilters({ [key]: next });
-  }
-
-  function setAndLoad(setter: (v: string) => void, val: string, key: string) {
-    setter(val);
-    applyFilters({ [key]: val });
+    setOpenFilter(null);
   }
 
   function clearAll() {
@@ -133,126 +170,129 @@ function ShopContent() {
   }
 
   const activeCount = [shape, style, occasion, availability, minPrice, maxPrice].filter(Boolean).length;
+  const sortLabel = SORTS.find(s => s.value === sort)?.label ?? 'Popular';
+  const availLabel = availability === 'in_stock' ? 'In stock' : availability === 'made_to_order' ? 'MTO' : null;
+  const priceActive = !!(minPrice || maxPrice);
+  const priceLabel = priceActive
+    ? `$${minPrice || '0'} – ${maxPrice ? '$' + maxPrice : '∞'}`
+    : 'Price';
 
   return (
     <main className="page-shell">
       <div className="container">
-        <div className="section-head" style={{ marginBottom: 24 }}>
+
+        {/* Page header */}
+        <div className="section-head" style={{ marginBottom: 20 }}>
           <div>
             <p className="eyebrow">Shop</p>
             <h1 className="section-title">All <em>sets</em></h1>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {activeCount > 0 && (
-              <button className="pill btn-ghost btn-sm" onClick={clearAll}>
-                Clear {activeCount} filter{activeCount > 1 ? 's' : ''}
-              </button>
-            )}
-            <span className="muted" style={{ fontSize: '.9rem' }}>
-              {loading ? '...' : `${products.length} results`}
-            </span>
-          </div>
+          <span className="muted" style={{ fontSize: '.9rem' }}>
+            {loading ? '…' : `${products.length} results`}
+          </span>
         </div>
 
-        {/* Search + sort row */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="filter-search-wrap" style={{ flex: 1, minWidth: 200 }}>
+        {/* ── Compact filter bar ─────────────────────── */}
+        <div className="shop-filter-bar">
+
+          {/* Search */}
+          <div className="filter-search-wrap shop-search">
             <span className="filter-search-icon">🔍</span>
             <input
               className="filter-search"
-              placeholder="Search sets, styles, shapes..."
+              placeholder="Search sets, styles, shapes…"
               value={search}
               onChange={e => handleSearch(e.target.value)}
             />
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {SORTS.map(s => (
-              <button
-                key={s.value}
-                className={`filter-pill${sort === s.value ? ' active' : ''}`}
-                style={{ padding: '8px 14px', fontSize: '.8rem' }}
-                onClick={() => setAndLoad(setSort, s.value, 'sort')}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
 
-        {/* Shape pills */}
-        <div style={{ marginBottom: 10 }}>
-          <span className="muted" style={{ fontSize: '.74rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', marginRight: 10 }}>Shape</span>
-          <div className="filter-bar" style={{ display: 'inline-flex', marginBottom: 0 }}>
-            {SHAPES.map(s => (
-              <button key={s} className={`filter-pill${shape === s ? ' active' : ''}`} onClick={() => toggle(shape, setShape, s, 'shape')}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
+          {/* Shape */}
+          <FilterDropdown name="shape" label={shape ? shape.charAt(0).toUpperCase() + shape.slice(1) : 'Shape'} active={!!shape} open={openFilter === 'shape'} onToggle={toggleDropdown}>
+            <div className="fdd-options">
+              {SHAPES.map(s => (
+                <button key={s} className={`fdd-option${shape === s ? ' active' : ''}`} onClick={() => pick(setShape, shape, s, 'shape')}>
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </button>
+              ))}
+            </div>
+          </FilterDropdown>
 
-        {/* Style pills */}
-        <div style={{ marginBottom: 10 }}>
-          <span className="muted" style={{ fontSize: '.74rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', marginRight: 10 }}>Style</span>
-          <div className="filter-bar" style={{ display: 'inline-flex', marginBottom: 0 }}>
-            {STYLES.map(s => (
-              <button key={s} className={`filter-pill${style === s ? ' active' : ''}`} onClick={() => toggle(style, setStyle, s, 'style')}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
+          {/* Style */}
+          <FilterDropdown name="style" label={style ? style.charAt(0).toUpperCase() + style.slice(1) : 'Style'} active={!!style} open={openFilter === 'style'} onToggle={toggleDropdown}>
+            <div className="fdd-options">
+              {STYLES.map(s => (
+                <button key={s} className={`fdd-option${style === s ? ' active' : ''}`} onClick={() => pick(setStyle, style, s, 'style')}>
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </button>
+              ))}
+            </div>
+          </FilterDropdown>
 
-        {/* Occasion + availability */}
-        <div style={{ display: 'flex', gap: 14, marginBottom: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <div>
-            <span className="muted" style={{ fontSize: '.74rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', marginRight: 10 }}>Occasion</span>
-            <div className="filter-bar" style={{ display: 'inline-flex', marginBottom: 0 }}>
+          {/* Occasion */}
+          <FilterDropdown name="occasion" label={occasion ? occasion.charAt(0).toUpperCase() + occasion.slice(1) : 'Occasion'} active={!!occasion} open={openFilter === 'occasion'} onToggle={toggleDropdown}>
+            <div className="fdd-options">
               {OCCASIONS.map(o => (
-                <button key={o} className={`filter-pill${occasion === o ? ' active' : ''}`} style={{ padding: '7px 14px', fontSize: '.8rem' }} onClick={() => toggle(occasion, setOccasion, o, 'occasion')}>
+                <button key={o} className={`fdd-option${occasion === o ? ' active' : ''}`} onClick={() => pick(setOccasion, occasion, o, 'occasion')}>
                   {o.charAt(0).toUpperCase() + o.slice(1)}
                 </button>
               ))}
             </div>
-          </div>
-          <div style={{ flexShrink: 0 }}>
-            <span className="muted" style={{ fontSize: '.74rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', marginRight: 10 }}>Stock</span>
-            <div className="filter-bar" style={{ display: 'inline-flex', marginBottom: 0 }}>
-              <button className={`filter-pill${availability === 'in_stock' ? ' active' : ''}`} onClick={() => toggle(availability, setAvailability, 'in_stock', 'availability')}>In stock</button>
-              <button className={`filter-pill${availability === 'made_to_order' ? ' active' : ''}`} onClick={() => toggle(availability, setAvailability, 'made_to_order', 'availability')}>Made to order</button>
-            </div>
-          </div>
-        </div>
+          </FilterDropdown>
 
-        {/* Price range */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 24 }}>
-          <span style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>Price</span>
-          <input
-            type="number"
-            min="0"
-            placeholder="Min $"
-            value={minPrice}
-            style={{ width: 80, padding: '6px 10px', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: '.85rem' }}
-            onChange={e => handlePriceChange('minPrice', e.target.value)}
-          />
-          <span className="muted" style={{ fontSize: '.85rem' }}>–</span>
-          <input
-            type="number"
-            min="0"
-            placeholder="Max $"
-            value={maxPrice}
-            style={{ width: 80, padding: '6px 10px', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: '.85rem' }}
-            onChange={e => handlePriceChange('maxPrice', e.target.value)}
-          />
-          {(minPrice || maxPrice) && (
-            <button
-              className="pill btn-ghost btn-sm"
-              onClick={() => { setMinPrice(''); setMaxPrice(''); applyFilters({ minPrice: '', maxPrice: '' }); }}
-            >
-              Clear
+          {/* Price */}
+          <FilterDropdown name="price" label={priceLabel} active={priceActive} open={openFilter === 'price'} onToggle={toggleDropdown}>
+            <p style={{ fontSize: '.74rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', margin: '0 0 10px' }}>Price range</p>
+            <div className="fdd-price-row">
+              <input type="number" min="0" placeholder="Min $" value={minPrice} className="fdd-price-input" onChange={e => handlePriceChange('minPrice', e.target.value)} />
+              <span className="muted">–</span>
+              <input type="number" min="0" placeholder="Max $" value={maxPrice} className="fdd-price-input" onChange={e => handlePriceChange('maxPrice', e.target.value)} />
+            </div>
+            {priceActive && (
+              <button className="fdd-clear-btn" onClick={() => { setMinPrice(''); setMaxPrice(''); applyFilters({ minPrice: '', maxPrice: '' }); setOpenFilter(null); }}>
+                Clear price
+              </button>
+            )}
+          </FilterDropdown>
+
+          {/* Availability */}
+          <FilterDropdown name="availability" label={availLabel ?? 'Stock'} active={!!availability} open={openFilter === 'availability'} onToggle={toggleDropdown}>
+            <div className="fdd-options">
+              <button className={`fdd-option${availability === 'in_stock' ? ' active' : ''}`} onClick={() => pick(setAvailability, availability, 'in_stock', 'availability')}>In stock</button>
+              <button className={`fdd-option${availability === 'made_to_order' ? ' active' : ''}`} onClick={() => pick(setAvailability, availability, 'made_to_order', 'availability')}>Made to order</button>
+            </div>
+          </FilterDropdown>
+
+          {/* Sort */}
+          <FilterDropdown name="sort" label={`${sortLabel}`} active={sort !== 'popular'} open={openFilter === 'sort'} onToggle={toggleDropdown}>
+            <div className="fdd-options" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+              {SORTS.map(s => (
+                <button key={s.value} className={`fdd-option fdd-option-row${sort === s.value ? ' active' : ''}`}
+                  onClick={() => { setSort(s.value); applyFilters({ sort: s.value }); setOpenFilter(null); }}>
+                  {s.label}
+                  {sort === s.value && <span style={{ marginLeft: 'auto' }}>✓</span>}
+                </button>
+              ))}
+            </div>
+          </FilterDropdown>
+
+          {/* Clear */}
+          {activeCount > 0 && (
+            <button className="pill btn-ghost btn-sm" onClick={clearAll} style={{ flexShrink: 0 }}>
+              ✕ Clear {activeCount}
             </button>
           )}
         </div>
+
+        {/* Active filter chips */}
+        {activeCount > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20, marginTop: -8 }}>
+            {shape && <span className="active-chip">{shape} <button onClick={() => pick(setShape, shape, shape, 'shape')}>✕</button></span>}
+            {style && <span className="active-chip">{style} <button onClick={() => pick(setStyle, style, style, 'style')}>✕</button></span>}
+            {occasion && <span className="active-chip">{occasion} <button onClick={() => pick(setOccasion, occasion, occasion, 'occasion')}>✕</button></span>}
+            {availability && <span className="active-chip">{availability === 'in_stock' ? 'In stock' : 'Made to order'} <button onClick={() => pick(setAvailability, availability, availability, 'availability')}>✕</button></span>}
+            {priceActive && <span className="active-chip">${minPrice || '0'} – {maxPrice ? '$' + maxPrice : '∞'} <button onClick={() => { setMinPrice(''); setMaxPrice(''); applyFilters({ minPrice: '', maxPrice: '' }); }}>✕</button></span>}
+          </div>
+        )}
 
         {/* Results */}
         {loading ? (

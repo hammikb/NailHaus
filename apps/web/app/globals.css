@@ -804,6 +804,97 @@ button { cursor: pointer; }
 .category-card span:first-child { font-size: 2.2rem; }
 .category-card span:last-child { font-weight: 700; font-size: .9rem; }
 
+/* ─── Shop filter bar ───────────────────────────────── */
+.shop-filter-bar {
+  display: flex; gap: 8px; align-items: center;
+  flex-wrap: wrap; margin-bottom: 16px;
+}
+.shop-search { flex: 1; min-width: 200px; max-width: 340px; }
+
+/* ─── Filter dropdowns ───────────────────────────────── */
+.fdd-wrap { position: relative; }
+
+.fdd-trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 14px; border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border); background: var(--surface);
+  font-size: .84rem; font-weight: 600; color: var(--muted);
+  cursor: pointer; transition: var(--transition); white-space: nowrap;
+  line-height: 1;
+}
+.fdd-trigger:hover { border-color: var(--accent); color: var(--accent); background: var(--soft); }
+.fdd-trigger.fdd-open {
+  border-color: var(--accent); color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(217,107,135,.12);
+}
+.fdd-trigger.fdd-active {
+  background: var(--accent); color: white; border-color: var(--accent);
+  box-shadow: var(--shadow-accent);
+}
+.fdd-trigger.fdd-active:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+.fdd-trigger.fdd-active.fdd-open { box-shadow: var(--shadow-accent), 0 0 0 3px rgba(217,107,135,.2); }
+
+.fdd-chevron { font-size: .55rem; opacity: .65; flex-shrink: 0; }
+.fdd-trigger.fdd-active .fdd-chevron { opacity: .8; }
+
+.fdd-menu {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+  background: white; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+  padding: 12px; min-width: 180px;
+  animation: fadeIn .14s ease;
+}
+
+.fdd-options {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.fdd-option {
+  padding: 6px 13px; border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border); background: var(--surface);
+  font-size: .82rem; font-weight: 600; color: var(--muted);
+  cursor: pointer; transition: var(--transition); white-space: nowrap;
+}
+.fdd-option:hover { border-color: var(--accent); color: var(--accent); background: var(--soft); }
+.fdd-option.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+/* Sort rows — full width inside the dropdown */
+.fdd-option-row {
+  width: 100%; border-radius: var(--radius-xs);
+  display: flex; align-items: center;
+  padding: 8px 12px; text-align: left;
+}
+
+.fdd-price-row { display: flex; align-items: center; gap: 8px; }
+.fdd-price-input {
+  width: 80px; padding: 7px 10px; border-radius: 10px;
+  border: 1.5px solid var(--border); font-size: .85rem;
+  background: var(--surface-2); transition: var(--transition);
+}
+.fdd-price-input:focus { outline: none; border-color: var(--accent); background: white; box-shadow: 0 0 0 3px rgba(217,107,135,.08); }
+
+.fdd-clear-btn {
+  margin-top: 10px; width: 100%; padding: 7px 12px;
+  border-radius: var(--radius-xs); border: 1px solid var(--border);
+  background: transparent; font-size: .8rem; font-weight: 600;
+  color: var(--muted); cursor: pointer; transition: var(--transition);
+}
+.fdd-clear-btn:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+
+/* ─── Active filter chips ────────────────────────────── */
+.active-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 12px; border-radius: var(--radius-pill);
+  background: var(--accent-light); color: var(--accent-dark);
+  font-size: .78rem; font-weight: 700; border: 1px solid rgba(217,107,135,.25);
+}
+.active-chip button {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--accent); font-size: .7rem; line-height: 1;
+  width: 14px; height: 14px; border-radius: 50%;
+  display: grid; place-items: center; transition: var(--transition);
+}
+.active-chip button:hover { background: var(--accent); color: white; }
+
 /* ─── Focus styles (accessibility) ──────────────────── */
 :focus-visible {
   outline: 2.5px solid var(--accent);
