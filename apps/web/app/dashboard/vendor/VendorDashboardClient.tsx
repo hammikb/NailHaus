@@ -8,7 +8,7 @@ import { ImportResult, PayoutSummary, Product, VendorDashboard } from '@/lib/typ
 
 type Tab = 'overview' | 'products' | 'analytics' | 'import' | 'payouts' | 'profile';
 type AnalyticsRow = { productId: string; name: string; emoji: string; bgColor: string; imageUrl: string | null; orders: number; units: number; revenue: number };
-type ImportMode = 'json' | 'csv';
+type ImportMode = 'json' | 'csv' | 'etsy';
 
 const SHAPES = ['almond', 'coffin', 'stiletto', 'square', 'round'];
 const STYLES = ['floral', 'minimal', 'glam', 'cute'];
@@ -113,6 +113,61 @@ function csvRowToProduct(row: Record<string, string>): Record<string, unknown> {
     glueIncluded: row.glueIncluded === 'true' ? true : row.glueIncluded === 'false' ? false : null,
     reusable: row.reusable === 'yes' ? true : row.reusable === 'no' ? false : null,
     wearTime: row.wearTime || '',
+  };
+}
+
+/* ─── Etsy CSV parser ────────────────────────────────── */
+function detectShape(text: string): string {
+  const t = text.toLowerCase();
+  if (t.includes('coffin') || t.includes('ballerina')) return 'coffin';
+  if (t.includes('stiletto') || t.includes('pointed')) return 'stiletto';
+  if (t.includes('square')) return 'square';
+  if (t.includes('round') || t.includes('oval')) return 'round';
+  if (t.includes('almond')) return 'almond';
+  return 'almond';
+}
+function detectStyle(text: string): string {
+  const t = text.toLowerCase();
+  if (/floral|flower|botanical|bloom|rose|cherry blossom|daisy/.test(t)) return 'floral';
+  if (/glam|glitter|sparkle|rhinestone|bling|chrome|metallic|gold|crystal/.test(t)) return 'glam';
+  if (/cute|kawaii|pastel|sweet|bow|bunny|kitty/.test(t)) return 'cute';
+  return 'minimal';
+}
+function etsyRowToProduct(row: Record<string, string>): Record<string, unknown> {
+  const title = row['TITLE'] || row['title'] || '';
+  const description = row['DESCRIPTION'] || row['description'] || '';
+  const rawTags = row['TAGS'] || row['tags'] || '';
+  const tagList = rawTags.split(/[,;]/).map(t => t.trim()).filter(Boolean);
+  const combined = `${title} ${description} ${rawTags}`.toLowerCase();
+  const price = parseFloat(row['PRICE'] || row['price'] || '0') || 0;
+  const qty = parseInt(row['QUANTITY'] || row['quantity'] || row['STOCK'] || '10') || 10;
+
+  // Variation → sizes (Etsy VARIATION1_VALUES or similar)
+  const sizesRaw = row['VARIATION1_VALUES'] || row['variation1_values'] || '';
+  const sizes = sizesRaw ? sizesRaw.split(',').map(s => s.trim()).filter(Boolean).join(', ') : '';
+
+  return {
+    name: title || 'Untitled',
+    description,
+    price,
+    originalPrice: null,
+    stock: qty,
+    shape: detectShape(combined),
+    style: detectStyle(combined),
+    badge: null,
+    availability: 'in_stock',
+    productionDays: null,
+    tags: tagList,
+    occasions: [],
+    emoji: '💅',
+    bgColor: '#fde8e8',
+    nailCount: null,
+    sizes,
+    sizeInventory: {},
+    finish: '',
+    glueIncluded: null,
+    reusable: null,
+    wearTime: '',
   };
 }
 
@@ -250,6 +305,10 @@ export function VendorDashboardClient() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState('');
+
+  // Etsy import
+  const [etsyRows, setEtsyRows] = useState<Record<string, unknown>[]>([]);
+  const [etsyParseError, setEtsyParseError] = useState('');
 
   // Payouts
   const [payouts, setPayouts] = useState<PayoutSummary | null>(null);
@@ -455,6 +514,37 @@ export function VendorDashboardClient() {
     const reader = new FileReader();
     reader.onload = ev => setImportText(String(ev.target?.result || ''));
     reader.readAsText(f);
+  }
+
+  function handleEtsyFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return;
+    setEtsyParseError(''); setEtsyRows([]);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const text = String(ev.target?.result || '');
+        const parsed = parseCSV(text);
+        if (!parsed.length) throw new Error('No rows found — make sure the file has a header row.');
+        const rows = parsed.map(etsyRowToProduct);
+        setEtsyRows(rows);
+      } catch (err) {
+        setEtsyParseError(err instanceof Error ? err.message : 'Could not parse CSV');
+      }
+    };
+    reader.readAsText(f);
+  }
+
+  async function runEtsyImport() {
+    if (!etsyRows.length) return;
+    setImporting(true); setImportError(''); setImportResult(null);
+    try {
+      const result = await api.importProducts(etsyRows);
+      setImportResult(result);
+      setEtsyRows([]);
+      api.vendorDashboard().then(d => { setData(d); setProducts(d.products); }).catch(() => {});
+    } catch (err: unknown) {
+      setImportError(err instanceof Error ? err.message : 'Import failed');
+    } finally { setImporting(false); }
   }
 
   /* Banner image upload */
@@ -1088,13 +1178,16 @@ export function VendorDashboardClient() {
         <div className="fade-in" style={{ maxWidth: 760 }}>
           <div style={{ marginBottom: 24 }}>
             <h2 className="section-title" style={{ fontSize: '1.4rem' }}>Import your <em>entire show</em></h2>
-            <p className="subtle">Upload your full catalog in one batch — up to 200 products. Use JSON or CSV.</p>
+            <p className="subtle">Upload your full catalog in one batch — up to 200 products. Use JSON, CSV, or import directly from Etsy.</p>
           </div>
 
           <div className="panel" style={{ padding: 28, marginBottom: 20 }}>
             <div className="tab-nav" style={{ marginBottom: 20 }}>
-              <button className={`tab-btn${importMode === 'json' ? ' active' : ''}`} onClick={() => setImportMode('json')}>{ }JSON</button>
+              <button className={`tab-btn${importMode === 'json' ? ' active' : ''}`} onClick={() => setImportMode('json')}>JSON</button>
               <button className={`tab-btn${importMode === 'csv' ? ' active' : ''}`} onClick={() => setImportMode('csv')}>CSV</button>
+              <button className={`tab-btn${importMode === 'etsy' ? ' active' : ''}`} onClick={() => { setImportMode('etsy'); setEtsyRows([]); setEtsyParseError(''); setImportResult(null); }}>
+                🛍️ Import from Etsy
+              </button>
             </div>
 
             {importMode === 'json' ? (
@@ -1138,10 +1231,86 @@ export function VendorDashboardClient() {
               </div>
             )}
 
-            {importError && <div className="error" style={{ marginTop: 12 }}>{importError}</div>}
-            <button className="pill btn-primary" style={{ marginTop: 16 }} onClick={runImport} disabled={importing || !importText.trim()}>
-              {importing ? '⏳ Importing...' : '🚀 Import products'}
-            </button>
+            {importMode === 'etsy' && (
+              <div>
+                {/* Instructions */}
+                <div className="panel" style={{ background: 'var(--info-bg)', border: '1px solid #bfdbfe', padding: '14px 18px', marginBottom: 20 }}>
+                  <p style={{ fontWeight: 800, fontSize: '.88rem', marginBottom: 8, color: 'var(--info)' }}>How to export your Etsy listings:</p>
+                  <ol style={{ margin: 0, paddingLeft: 20, fontSize: '.84rem', lineHeight: 1.8, color: 'var(--text-2)' }}>
+                    <li>In Etsy, go to <strong>Shop Manager → Listings</strong></li>
+                    <li>Click <strong>Options → Download data</strong> in the top-right</li>
+                    <li>Choose <strong>All listings</strong> and click Export CSV</li>
+                    <li>Upload that file below — we&apos;ll map your listings automatically</li>
+                  </ol>
+                </div>
+
+                <div className="drop-zone" style={{ marginBottom: 16 }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => {
+                    e.preventDefault();
+                    const f = e.dataTransfer.files[0];
+                    if (f) { setEtsyParseError(''); setEtsyRows([]); const r = new FileReader(); r.onload = ev => { try { const t = String(ev.target?.result || ''); const p = parseCSV(t); if (!p.length) throw new Error('No rows found'); setEtsyRows(p.map(etsyRowToProduct)); } catch (err) { setEtsyParseError(err instanceof Error ? err.message : 'Parse failed'); } }; r.readAsText(f); }
+                  }}>
+                  <div style={{ fontSize: '2.2rem', marginBottom: 8 }}>🛍️</div>
+                  <div style={{ fontWeight: 700, marginBottom: 6 }}>Drop your Etsy CSV here</div>
+                  <div className="muted" style={{ fontSize: '.85rem', marginBottom: 14 }}>or choose a file</div>
+                  <label className="pill btn-ghost" style={{ cursor: 'pointer' }}>
+                    📁 Choose Etsy CSV
+                    <input type="file" accept=".csv,text/csv" onChange={handleEtsyFile} style={{ display: 'none' }} />
+                  </label>
+                </div>
+
+                {etsyParseError && <div className="error" style={{ marginBottom: 12 }}>{etsyParseError}</div>}
+
+                {etsyRows.length > 0 && (
+                  <div className="fade-in">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <p style={{ fontWeight: 700, fontSize: '.9rem', margin: 0 }}>
+                        ✓ Parsed <strong style={{ color: 'var(--success)' }}>{etsyRows.length} listing{etsyRows.length !== 1 ? 's' : ''}</strong> — review before importing:
+                      </p>
+                      <button className="pill btn-ghost btn-sm" onClick={() => { setEtsyRows([]); setEtsyParseError(''); }}>✕ Clear</button>
+                    </div>
+                    <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 12, marginBottom: 16 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.82rem' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--surface-2)', position: 'sticky', top: 0 }}>
+                            <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 800, fontSize: '.72rem', textTransform: 'uppercase', color: 'var(--muted)' }}>Name</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, fontSize: '.72rem', textTransform: 'uppercase', color: 'var(--muted)' }}>Price</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 800, fontSize: '.72rem', textTransform: 'uppercase', color: 'var(--muted)' }}>Shape</th>
+                            <th style={{ padding: '8px 14px', textAlign: 'center', fontWeight: 800, fontSize: '.72rem', textTransform: 'uppercase', color: 'var(--muted)' }}>Style</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {etsyRows.map((row, i) => (
+                            <tr key={i} style={{ borderTop: '1px solid var(--border-2)' }}>
+                              <td style={{ padding: '8px 14px', fontWeight: 600 }}>{String(row.name).slice(0, 48)}{String(row.name).length > 48 ? '…' : ''}</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right' }}>${Number(row.price).toFixed(2)}</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'center', textTransform: 'capitalize' }}>{String(row.shape)}</td>
+                              <td style={{ padding: '8px 14px', textAlign: 'center', textTransform: 'capitalize' }}>{String(row.style)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {importError && <div className="error" style={{ marginBottom: 12 }}>{importError}</div>}
+
+                {etsyRows.length > 0 && (
+                  <button className="pill btn-primary" onClick={runEtsyImport} disabled={importing}>
+                    {importing ? '⏳ Importing...' : `🚀 Import ${etsyRows.length} Etsy listing${etsyRows.length !== 1 ? 's' : ''}`}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {importMode !== 'etsy' && importError && <div className="error" style={{ marginTop: 12 }}>{importError}</div>}
+            {importMode !== 'etsy' && (
+              <button className="pill btn-primary" style={{ marginTop: 16 }} onClick={runImport} disabled={importing || !importText.trim()}>
+                {importing ? '⏳ Importing...' : '🚀 Import products'}
+              </button>
+            )}
           </div>
 
           {importResult && (

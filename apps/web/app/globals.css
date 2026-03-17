@@ -895,6 +895,46 @@ button { cursor: pointer; }
 }
 .active-chip button:hover { background: var(--accent); color: white; }
 
+/* ─── OAuth buttons ─────────────────────────────────── */
+.oauth-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 18px;
+  border-radius: var(--radius-xs);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.oauth-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px rgba(217,107,135,.12);
+  background: var(--surface-3);
+}
+.oauth-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.oauth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: var(--muted);
+  font-size: .8rem;
+}
+.oauth-divider::before,
+.oauth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
 /* ─── Focus styles (accessibility) ──────────────────── */
 :focus-visible {
   outline: 2.5px solid var(--accent);
