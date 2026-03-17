@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { ProductCard } from '@/components/ProductCard';
 import { api } from '@/lib/api';
 import { Product } from '@/lib/types';
@@ -17,19 +18,40 @@ const SORTS = [
 ];
 
 export default function ShopPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [shape, setShape] = useState('');
-  const [style, setStyle] = useState('');
-  const [occasion, setOccasion] = useState('');
-  const [availability, setAvailability] = useState('');
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
-  const [sort, setSort] = useState('popular');
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
+  const [shape, setShape] = useState(() => searchParams.get('shape') ?? '');
+  const [style, setStyle] = useState(() => searchParams.get('style') ?? '');
+  const [occasion, setOccasion] = useState(() => searchParams.get('occasion') ?? '');
+  const [availability, setAvailability] = useState(() => searchParams.get('availability') ?? '');
+  const [minPrice, setMinPrice] = useState(() => searchParams.get('minPrice') ?? '');
+  const [maxPrice, setMaxPrice] = useState(() => searchParams.get('maxPrice') ?? '');
+  const [sort, setSort] = useState(() => searchParams.get('sort') ?? 'popular');
 
-  const load = useCallback((q: { search?: string; shape?: string; style?: string; occasion?: string; availability?: string; sort?: string; minPrice?: string; maxPrice?: string }) => {
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const priceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function pushParams(overrides: Record<string, string> = {}) {
+    const current = { search, shape, style, occasion, availability, sort, minPrice, maxPrice };
+    const merged = { ...current, ...overrides };
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(merged)) {
+      if (v && v !== 'popular') params.set(k, v);
+    }
+    // Always preserve sort if not default
+    if (merged.sort && merged.sort !== 'popular') params.set('sort', merged.sort);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  const load = useCallback((q: {
+    search?: string; shape?: string; style?: string; occasion?: string;
+    availability?: string; sort?: string; minPrice?: string; maxPrice?: string;
+  }) => {
     setLoading(true);
     api.getProducts({
       search: q.search || undefined,
@@ -44,19 +66,27 @@ export default function ShopPage() {
   }, []);
 
   useEffect(() => {
-    load({ sort });
+    load({ search, shape, style, occasion, availability, sort, minPrice, maxPrice });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function applyFilters(overrides: Record<string, string> = {}) {
     const q = { search, shape, style, occasion, availability, sort, minPrice, maxPrice, ...overrides };
     load(q);
+    pushParams(overrides);
   }
 
   function handleSearch(val: string) {
     setSearch(val);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => applyFilters({ search: val }), 380);
+  }
+
+  function handlePriceChange(key: 'minPrice' | 'maxPrice', val: string) {
+    if (key === 'minPrice') setMinPrice(val);
+    else setMaxPrice(val);
+    if (priceTimer.current) clearTimeout(priceTimer.current);
+    priceTimer.current = setTimeout(() => applyFilters({ [key]: val }), 500);
   }
 
   function toggle(getter: string, setter: (v: string) => void, val: string, key: string) {
@@ -68,6 +98,13 @@ export default function ShopPage() {
   function setAndLoad(setter: (v: string) => void, val: string, key: string) {
     setter(val);
     applyFilters({ [key]: val });
+  }
+
+  function clearAll() {
+    setShape(''); setStyle(''); setOccasion(''); setAvailability('');
+    setSearch(''); setMinPrice(''); setMaxPrice('');
+    load({ sort });
+    router.replace(pathname, { scroll: false });
   }
 
   const activeCount = [shape, style, occasion, availability, minPrice, maxPrice].filter(Boolean).length;
@@ -82,10 +119,7 @@ export default function ShopPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {activeCount > 0 && (
-              <button className="pill btn-ghost btn-sm" onClick={() => {
-                setShape(''); setStyle(''); setOccasion(''); setAvailability(''); setSearch(''); setMinPrice(''); setMaxPrice('');
-                load({ sort });
-              }}>
+              <button className="pill btn-ghost btn-sm" onClick={clearAll}>
                 Clear {activeCount} filter{activeCount > 1 ? 's' : ''}
               </button>
             )}
@@ -174,7 +208,7 @@ export default function ShopPage() {
             placeholder="Min $"
             value={minPrice}
             style={{ width: 80, padding: '6px 10px', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: '.85rem' }}
-            onChange={e => { setMinPrice(e.target.value); applyFilters({ minPrice: e.target.value }); }}
+            onChange={e => handlePriceChange('minPrice', e.target.value)}
           />
           <span className="muted" style={{ fontSize: '.85rem' }}>–</span>
           <input
@@ -183,7 +217,7 @@ export default function ShopPage() {
             placeholder="Max $"
             value={maxPrice}
             style={{ width: 80, padding: '6px 10px', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: '.85rem' }}
-            onChange={e => { setMaxPrice(e.target.value); applyFilters({ maxPrice: e.target.value }); }}
+            onChange={e => handlePriceChange('maxPrice', e.target.value)}
           />
           {(minPrice || maxPrice) && (
             <button
@@ -200,7 +234,7 @@ export default function ShopPage() {
           <div className="grid product-grid">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="card" style={{ overflow: 'hidden' }}>
-                <div className="shimmer" style={{ height: 190 }} />
+                <div className="shimmer" style={{ height: 210 }} />
                 <div style={{ padding: '18px 20px' }}>
                   <div className="shimmer" style={{ height: 14, marginBottom: 8, width: '60%' }} />
                   <div className="shimmer" style={{ height: 18, marginBottom: 12 }} />

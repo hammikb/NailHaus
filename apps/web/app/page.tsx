@@ -75,15 +75,9 @@ export default async function HomePage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))', gap: 12 }}>
             {CATEGORIES.map(cat => (
-              <Link key={cat.label} href={cat.href} className="card" style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                padding: '24px 16px', gap: 10, textAlign: 'center',
-                background: cat.color, border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)', transition: 'var(--transition)',
-                textDecoration: 'none',
-              }}>
-                <span style={{ fontSize: '2rem' }}>{cat.emoji}</span>
-                <span style={{ fontWeight: 700, fontSize: '.9rem' }}>{cat.label}</span>
+              <Link key={cat.label} href={cat.href} className="category-card" style={{ background: cat.color }}>
+                <span>{cat.emoji}</span>
+                <span>{cat.label}</span>
               </Link>
             ))}
           </div>
