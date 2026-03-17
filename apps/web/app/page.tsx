@@ -1,7 +1,11 @@
 import Link from 'next/link';
 import { ProductCard } from '@/components/ProductCard';
 import { VendorCard } from '@/components/VendorCard';
-import { api } from '@/lib/api';
+import { getPopularProducts, getTopVendors } from '@/lib/queries';
+
+// Revalidate the home page at most once per minute.
+// Queries Supabase directly — no internal HTTP roundtrip through the API routes.
+export const revalidate = 60;
 
 const CATEGORIES = [
   { label: 'Almond', emoji: '🌸', href: '/shop?shape=almond', color: '#fde8e8' },
@@ -14,8 +18,8 @@ const CATEGORIES = [
 
 export default async function HomePage() {
   const [products, vendors] = await Promise.all([
-    api.getProducts({ limit: 8, sort: 'popular' }).catch(() => []),
-    api.getVendors().catch(() => []),
+    getPopularProducts(8).catch(() => []),
+    getTopVendors().catch(() => []),
   ]);
 
   return (

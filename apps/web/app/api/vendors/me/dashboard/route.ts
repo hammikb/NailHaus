@@ -5,13 +5,15 @@ export async function GET(req: NextRequest) {
   const user = await getAuthUser(req);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: vendor } = await supabaseAdmin.from('vendors').select('*').eq('user_id', user.id).single();
+  const { data: vendor } = await supabaseAdmin.from('vendors')
+    .select('id, name, tagline, description, emoji, bg_color, tags, verified, rating, total_sales, total_products, social_links, announcement, collections, created_at, banner_url')
+    .eq('user_id', user.id).single();
   if (!vendor) return err('no_vendor', 404);
 
   const [productsRes, reviewsRes, shipmentsRes, ordersRes, verificationRes] = await Promise.all([
-    supabaseAdmin.from('products').select('*').eq('vendor_id', vendor.id).order('created_at', { ascending: false }),
+    supabaseAdmin.from('products').select('id, vendor_id, name, description, price, original_price, emoji, bg_color, shape, style, badge, stock, tags, availability, production_days, occasions, collection_id, nail_count, image_url, images, sizes, size_inventory, finish, glue_included, reusable, wear_time, hidden, rating, review_count, created_at').eq('vendor_id', vendor.id).order('created_at', { ascending: false }),
     supabaseAdmin.from('reviews').select('*, profiles!user_id(name), products!product_id(id, name)').eq('vendor_id', vendor.id).order('created_at', { ascending: false }),
-    supabaseAdmin.from('shipments').select('*').eq('vendor_id', vendor.id),
+    supabaseAdmin.from('shipments').select('id, vendor_id, order_id, status, created_at').eq('vendor_id', vendor.id),
     supabaseAdmin.from('order_items').select('*, orders!order_id(id, user_id, status, shipping_address, created_at)').eq('vendor_id', vendor.id),
     supabaseAdmin.from('vendor_verification_requests').select('*').eq('vendor_id', vendor.id).eq('status', 'pending').maybeSingle(),
   ]);

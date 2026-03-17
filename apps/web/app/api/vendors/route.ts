@@ -4,7 +4,7 @@ import { supabaseAdmin, getAuthUser, mapVendor, err } from '@/lib/route-helpers'
 export async function GET() {
   const { data, error } = await supabaseAdmin
     .from('vendors')
-    .select('*')
+    .select('id, name, tagline, description, emoji, bg_color, tags, verified, rating, total_sales, total_products, social_links, announcement, collections, created_at, banner_url')
     .order('total_sales', { ascending: false });
 
   if (error) return err(error.message, 500);

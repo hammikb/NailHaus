@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   const minPrice = searchParams.get('minPrice');
   const maxPrice = searchParams.get('maxPrice');
 
-  let query = supabaseAdmin.from('products').select('*, vendors!vendor_id(id, name, emoji, bg_color)').eq('hidden', false);
+  let query = supabaseAdmin.from('products').select('id, vendor_id, name, description, price, original_price, emoji, bg_color, shape, style, badge, stock, tags, availability, production_days, occasions, collection_id, nail_count, image_url, images, sizes, size_inventory, finish, glue_included, reusable, wear_time, hidden, rating, review_count, created_at, vendors!vendor_id(id, name, emoji, bg_color)').eq('hidden', false);
 
   if (shape) query = query.eq('shape', shape);
   if (style) query = query.eq('style', style);
