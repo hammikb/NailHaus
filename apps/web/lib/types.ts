@@ -158,6 +158,43 @@ export interface AdminUser {
   created_at: string;
 }
 
+export interface AdminProduct {
+  id: string;
+  name: string;
+  emoji: string;
+  bgColor: string;
+  price: number;
+  hidden: boolean;
+  availability: string;
+  reviewCount: number;
+  rating: number;
+  createdAt: string;
+  vendorId: string;
+  vendorName: string | null;
+}
+
+export interface AdminOrder {
+  id: string;
+  userId: string;
+  buyerName: string;
+  total: number;
+  status: string;
+  createdAt: string;
+}
+
+export interface AdminVendorRow {
+  id: string;
+  name: string;
+  emoji: string;
+  bgColor: string;
+  verified: boolean;
+  totalSales: number;
+  totalProducts: number;
+  rating: number;
+  createdAt: string;
+  userId: string;
+}
+
 export interface VerificationRequest {
   id: string;
   vendor_id: string;

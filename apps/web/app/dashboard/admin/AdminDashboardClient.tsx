@@ -4,9 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
-import { AdminStats, AdminUser, VerificationRequest } from '@/lib/types';
+import { AdminOrder, AdminProduct, AdminStats, AdminUser, AdminVendorRow, VerificationRequest } from '@/lib/types';
 
-type Tab = 'overview' | 'verifications' | 'users';
+type Tab = 'overview' | 'verifications' | 'users' | 'products' | 'orders' | 'vendors';
 
 export function AdminDashboardClient() {
   const { user, loading } = useAuth();
@@ -21,6 +21,21 @@ export function AdminDashboardClient() {
   const [userRoleFilter, setUserRoleFilter] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
+
+  // Products tab
+  const [adminProducts, setAdminProducts] = useState<AdminProduct[]>([]);
+  const [productSearch, setProductSearch] = useState('');
+  const [productHiddenFilter, setProductHiddenFilter] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  // Orders tab
+  const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
+  const [orderStatusFilter, setOrderStatusFilter] = useState('');
+
+  // Vendors tab
+  const [adminVendors, setAdminVendors] = useState<AdminVendorRow[]>([]);
+  const [vendorSearch, setVendorSearch] = useState('');
+  const [vendorVerifiedFilter, setVendorVerifiedFilter] = useState('');
 
   useEffect(() => {
     if (!loading && (!user || user.role !== 'admin')) router.replace('/');
@@ -43,7 +58,11 @@ export function AdminDashboardClient() {
   useEffect(() => {
     if (tab === 'verifications') loadVerifications(verifFilter);
     if (tab === 'users') loadUsers(userSearch, userRoleFilter);
-  }, [tab, verifFilter, userSearch, userRoleFilter, loadVerifications, loadUsers]);
+    if (tab === 'products') api.getAdminProducts(productSearch, productHiddenFilter).then(setAdminProducts).catch(() => setAdminProducts([]));
+    if (tab === 'orders') api.getAdminOrders(orderStatusFilter).then(setAdminOrders).catch(() => setAdminOrders([]));
+    if (tab === 'vendors') api.getAdminVendors(vendorSearch, vendorVerifiedFilter).then(setAdminVendors).catch(() => setAdminVendors([]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, verifFilter, userSearch, userRoleFilter, productSearch, productHiddenFilter, orderStatusFilter, vendorSearch, vendorVerifiedFilter]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -77,6 +96,40 @@ export function AdminDashboardClient() {
     }
   }
 
+  async function handleToggleProductHidden(p: AdminProduct) {
+    setBusy(true);
+    try {
+      await api.toggleProductHidden(p.id, !p.hidden);
+      showToast(p.hidden ? `"${p.name}" is now visible.` : `"${p.name}" hidden from shop.`);
+      setAdminProducts(ps => ps.map(x => x.id === p.id ? { ...x, hidden: !x.hidden } : x));
+    } catch {
+      showToast('Failed to update product.');
+    } finally { setBusy(false); }
+  }
+
+  async function handleDeleteProduct(id: string) {
+    setBusy(true);
+    try {
+      await api.adminDeleteProduct(id);
+      showToast('Product deleted.');
+      setAdminProducts(ps => ps.filter(x => x.id !== id));
+      setDeleteConfirm(null);
+    } catch {
+      showToast('Failed to delete product.');
+    } finally { setBusy(false); }
+  }
+
+  async function handleToggleVendorVerified(v: AdminVendorRow) {
+    setBusy(true);
+    try {
+      await api.toggleVendorVerified(v.id, !v.verified);
+      showToast(v.verified ? `${v.name} verification removed.` : `${v.name} marked as verified.`);
+      setAdminVendors(vs => vs.map(x => x.id === v.id ? { ...x, verified: !x.verified } : x));
+    } catch {
+      showToast('Failed to update vendor.');
+    } finally { setBusy(false); }
+  }
+
   if (loading || !user) return null;
   if (user.role !== 'admin') return null;
 
@@ -95,9 +148,14 @@ export function AdminDashboardClient() {
 
         {/* Tab nav */}
         <div className="tab-nav">
-          {(['overview', 'verifications', 'users'] as Tab[]).map(t => (
+          {(['overview', 'verifications', 'users', 'vendors', 'products', 'orders'] as Tab[]).map(t => (
             <button key={t} className={`tab-btn${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-              {t === 'overview' ? '📊 Overview' : t === 'verifications' ? `✓ Verifications${stats?.pendingVerifications ? ` (${stats.pendingVerifications})` : ''}` : '👥 Users'}
+              {t === 'overview' ? '📊 Overview' :
+               t === 'verifications' ? `✓ Verifications${stats?.pendingVerifications ? ` (${stats.pendingVerifications})` : ''}` :
+               t === 'users' ? '👥 Users' :
+               t === 'vendors' ? '🎨 Vendors' :
+               t === 'products' ? '💅 Products' :
+               '📦 Orders'}
             </button>
           ))}
         </div>
@@ -314,6 +372,198 @@ export function AdminDashboardClient() {
                         </td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+        {/* ─── Vendors ─── */}
+        {tab === 'vendors' && (
+          <>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+              <div className="filter-search-wrap" style={{ flex: 1, minWidth: 200 }}>
+                <span className="filter-search-icon">🔍</span>
+                <input className="filter-search" placeholder="Search vendors..." value={vendorSearch} onChange={e => setVendorSearch(e.target.value)} />
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[['', 'All'], ['true', 'Verified'], ['false', 'Unverified']].map(([val, label]) => (
+                  <button key={val} className={`filter-pill${vendorVerifiedFilter === val ? ' active' : ''}`} onClick={() => setVendorVerifiedFilter(val)}>{label}</button>
+                ))}
+              </div>
+            </div>
+            {adminVendors.length === 0 ? (
+              <div className="panel empty-state"><span className="empty-icon">🎨</span><p>No vendors found.</p></div>
+            ) : (
+              <div className="panel" style={{ overflow: 'hidden' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Vendor</th>
+                      <th>Products</th>
+                      <th>Sales</th>
+                      <th>Rating</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminVendors.map(v => (
+                      <tr key={v.id}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 8, background: v.bgColor, display: 'grid', placeItems: 'center', fontSize: '1rem', flexShrink: 0 }}>{v.emoji}</div>
+                            <span style={{ fontWeight: 700 }}>{v.name}</span>
+                          </div>
+                        </td>
+                        <td>{v.totalProducts ?? 0}</td>
+                        <td>{v.totalSales ?? 0}</td>
+                        <td>{v.rating ? Number(v.rating).toFixed(1) : '—'}</td>
+                        <td>
+                          {v.verified
+                            ? <span className="chip" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>✓ Verified</span>
+                            : <span className="chip" style={{ background: 'var(--surface-2)', color: 'var(--muted)' }}>Unverified</span>}
+                        </td>
+                        <td>
+                          <button
+                            className={`pill btn-sm ${v.verified ? 'btn-ghost' : ''}`}
+                            style={!v.verified ? { background: 'var(--success-bg)', color: 'var(--success)', borderColor: '#86efac' } : {}}
+                            disabled={busy}
+                            onClick={() => handleToggleVendorVerified(v)}
+                          >
+                            {v.verified ? 'Remove verified' : '✓ Verify'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ─── Products ─── */}
+        {tab === 'products' && (
+          <>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+              <div className="filter-search-wrap" style={{ flex: 1, minWidth: 200 }}>
+                <span className="filter-search-icon">🔍</span>
+                <input className="filter-search" placeholder="Search products..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[['', 'All'], ['false', 'Visible'], ['true', 'Hidden']].map(([val, label]) => (
+                  <button key={val} className={`filter-pill${productHiddenFilter === val ? ' active' : ''}`} onClick={() => setProductHiddenFilter(val)}>{label}</button>
+                ))}
+              </div>
+            </div>
+            {adminProducts.length === 0 ? (
+              <div className="panel empty-state"><span className="empty-icon">💅</span><p>No products found.</p></div>
+            ) : (
+              <div className="panel" style={{ overflow: 'hidden' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>Vendor</th>
+                      <th>Price</th>
+                      <th>Reviews</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminProducts.map(p => (
+                      <tr key={p.id} style={{ opacity: p.hidden ? 0.55 : 1 }}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 8, background: p.bgColor, display: 'grid', placeItems: 'center', fontSize: '1rem', flexShrink: 0 }}>{p.emoji}</div>
+                            <span style={{ fontWeight: 700 }}>{p.name}</span>
+                          </div>
+                        </td>
+                        <td className="muted" style={{ fontSize: '.82rem' }}>{p.vendorName ?? '—'}</td>
+                        <td>${Number(p.price).toFixed(2)}</td>
+                        <td>{p.reviewCount ?? 0}</td>
+                        <td>
+                          {p.hidden
+                            ? <span className="chip" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>Hidden</span>
+                            : <span className="chip" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>Visible</span>}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button
+                              className="pill btn-sm btn-ghost"
+                              disabled={busy}
+                              onClick={() => handleToggleProductHidden(p)}
+                            >
+                              {p.hidden ? '👁 Show' : '🚫 Hide'}
+                            </button>
+                            {deleteConfirm === p.id ? (
+                              <>
+                                <button className="pill btn-sm btn-danger" disabled={busy} onClick={() => handleDeleteProduct(p.id)}>Confirm delete</button>
+                                <button className="pill btn-sm btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+                              </>
+                            ) : (
+                              <button className="pill btn-sm btn-danger" disabled={busy} onClick={() => setDeleteConfirm(p.id)}>Delete</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ─── Orders ─── */}
+        {tab === 'orders' && (
+          <>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+              {[['', 'All'], ['confirmed', 'Confirmed'], ['shipped', 'Shipped'], ['delivered', 'Delivered'], ['cancelled', 'Cancelled']].map(([val, label]) => (
+                <button key={val} className={`filter-pill${orderStatusFilter === val ? ' active' : ''}`} onClick={() => setOrderStatusFilter(val)}>{label}</button>
+              ))}
+            </div>
+            {adminOrders.length === 0 ? (
+              <div className="panel empty-state"><span className="empty-icon">📦</span><p>No orders found.</p></div>
+            ) : (
+              <div className="panel" style={{ overflow: 'hidden' }}>
+                <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="chip">{adminOrders.length} orders</span>
+                  <strong style={{ color: 'var(--accent)' }}>
+                    ${adminOrders.reduce((s, o) => s + Number(o.total), 0).toFixed(2)} total
+                  </strong>
+                </div>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Order ID</th>
+                      <th>Buyer</th>
+                      <th>Total</th>
+                      <th>Status</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminOrders.map(o => {
+                      const statusColors: Record<string, { bg: string; color: string }> = {
+                        confirmed: { bg: 'var(--info-bg)', color: 'var(--info)' },
+                        shipped: { bg: 'var(--warning-bg)', color: 'var(--warning)' },
+                        delivered: { bg: 'var(--success-bg)', color: 'var(--success)' },
+                        cancelled: { bg: 'var(--danger-bg)', color: 'var(--danger)' },
+                      };
+                      const sc = statusColors[o.status] ?? { bg: 'var(--surface-2)', color: 'var(--muted)' };
+                      return (
+                        <tr key={o.id}>
+                          <td style={{ fontFamily: 'monospace', fontSize: '.85rem', fontWeight: 700 }}>#{o.id.slice(0, 8).toUpperCase()}</td>
+                          <td style={{ fontWeight: 600 }}>{o.buyerName}</td>
+                          <td style={{ fontWeight: 800 }}>${Number(o.total).toFixed(2)}</td>
+                          <td><span className="chip" style={{ background: sc.bg, color: sc.color, borderColor: 'transparent', textTransform: 'capitalize' }}>{o.status}</span></td>
+                          <td className="muted" style={{ fontSize: '.82rem' }}>{new Date(o.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

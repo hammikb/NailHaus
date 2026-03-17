@@ -182,8 +182,8 @@ export default function CartPage() {
 
               <div className="trust-grid" style={{ gridTemplateColumns: '1fr', gap: 8, marginTop: 20 }}>
                 <div className="trust-card" style={{ padding: '10px 14px' }}>
-                  <span className="trust-icon" style={{ fontSize: '1.2rem' }}>🛡️</span>
-                  <div><div className="trust-title" style={{ fontSize: '.8rem' }}>Buyer protection</div></div>
+                  <span className="trust-icon" style={{ fontSize: '1.2rem' }}>✅</span>
+                  <div><div className="trust-title" style={{ fontSize: '.8rem' }}>Verified sellers</div></div>
                 </div>
                 <div className="trust-card" style={{ padding: '10px 14px' }}>
                   <span className="trust-icon" style={{ fontSize: '1.2rem' }}>🔒</span>

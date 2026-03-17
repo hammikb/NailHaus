@@ -1,4 +1,4 @@
-import { AdminStats, AdminUser, AuthResponse, ImportResult, Order, PayoutSummary, Product, User, VendorDashboard, VendorDetail, VendorSummary, VerificationRequest } from './types';
+import { AdminOrder, AdminProduct, AdminStats, AdminUser, AdminVendorRow, AuthResponse, ImportResult, Order, PayoutSummary, Product, User, VendorDashboard, VendorDetail, VendorSummary, VerificationRequest } from './types';
 
 const TOKEN_KEY = 'nh_tok';
 const USER_KEY = 'nh_usr';
@@ -84,6 +84,9 @@ export const api = {
   me() {
     return request<User>('/auth/me');
   },
+  updateProfile(data: { name: string }) {
+    return request<User>('/auth/me', { method: 'PUT', body: JSON.stringify(data) });
+  },
   logout() {
     return request<{ success: true }>('/auth/logout', { method: 'POST', body: JSON.stringify({}) });
   },
@@ -107,6 +110,9 @@ export const api = {
   },
   getRevenueTrend() {
     return request<Array<{ label: string; rev: number }>>('/vendors/me/revenue-trend');
+  },
+  getAnalytics() {
+    return request<Array<{ productId: string; name: string; emoji: string; bgColor: string; imageUrl: string | null; orders: number; units: number; revenue: number }>>('/vendors/me/analytics');
   },
   updateVendorProfile(data: Record<string, unknown>) {
     return request<VendorDetail>('/vendors/me', { method: 'PUT', body: JSON.stringify(data) });
@@ -154,5 +160,32 @@ export const api = {
   },
   reviewVerification(id: string, status: 'approved' | 'rejected', adminNote = '') {
     return request<VerificationRequest>(`/admin/verification-requests/${id}`, { method: 'PUT', body: JSON.stringify({ status, adminNote }) });
+  },
+  getAdminProducts(search = '', hidden = '') {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (hidden) params.set('hidden', hidden);
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    return request<AdminProduct[]>(`/admin/products${suffix}`);
+  },
+  toggleProductHidden(id: string, hidden: boolean) {
+    return request<{ success: boolean }>(`/admin/products/${id}`, { method: 'PUT', body: JSON.stringify({ hidden }) });
+  },
+  adminDeleteProduct(id: string) {
+    return request<{ success: boolean }>(`/admin/products/${id}`, { method: 'DELETE' });
+  },
+  getAdminOrders(status = '') {
+    const suffix = status ? `?status=${status}` : '';
+    return request<AdminOrder[]>(`/admin/orders${suffix}`);
+  },
+  getAdminVendors(search = '', verified = '') {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (verified) params.set('verified', verified);
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    return request<AdminVendorRow[]>(`/admin/vendors${suffix}`);
+  },
+  toggleVendorVerified(id: string, verified: boolean) {
+    return request<{ success: boolean }>(`/admin/vendors/${id}`, { method: 'PUT', body: JSON.stringify({ verified }) });
   },
 };

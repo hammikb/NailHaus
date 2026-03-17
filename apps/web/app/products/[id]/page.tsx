@@ -360,10 +360,10 @@ export default async function ProductDetailPage({
 
         <div className="trust-grid" style={{ marginTop: 24 }}>
           <div className="trust-card">
-            <span className="trust-icon">🛡️</span>
+            <span className="trust-icon">🔒</span>
             <div>
-              <div className="trust-title">Buyer protection</div>
-              <div className="trust-desc">Covered on every order</div>
+              <div className="trust-title">Secure checkout</div>
+              <div className="trust-desc">Powered by Stripe</div>
             </div>
           </div>
           <div className="trust-card">

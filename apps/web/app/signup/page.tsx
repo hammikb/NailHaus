@@ -18,7 +18,7 @@ export default function SignupPage() {
             </div>
             <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="auth-trust-row"><span>🎨</span> Support indie nail artists directly</div>
-              <div className="auth-trust-row"><span>🛡️</span> Buyer protection included</div>
+              <div className="auth-trust-row"><span>💌</span> Early access to new drops</div>
               <div className="auth-trust-row"><span>💌</span> Exclusive drops &amp; early access</div>
             </div>
           </div>

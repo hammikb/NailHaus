@@ -157,10 +157,10 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
             </div>
           </div>
           <div className="trust-card" style={{ background: '#fdf4ff', borderColor: '#e9d5ff' }}>
-            <span className="trust-icon">💌</span>
+            <span className="trust-icon">⭐</span>
             <div>
-              <div className="trust-title" style={{ color: '#7e22ce' }}>Buyer protection</div>
-              <div className="trust-desc">Covered on every order</div>
+              <div className="trust-title" style={{ color: '#7e22ce' }}>Verified reviews</div>
+              <div className="trust-desc">From real buyers only</div>
             </div>
           </div>
           <div className="trust-card">

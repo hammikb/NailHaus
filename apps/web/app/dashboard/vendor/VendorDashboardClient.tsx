@@ -6,7 +6,8 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import { ImportResult, PayoutSummary, Product, VendorDashboard } from '@/lib/types';
 
-type Tab = 'overview' | 'products' | 'import' | 'payouts' | 'profile';
+type Tab = 'overview' | 'products' | 'analytics' | 'import' | 'payouts' | 'profile';
+type AnalyticsRow = { productId: string; name: string; emoji: string; bgColor: string; imageUrl: string | null; orders: number; units: number; revenue: number };
 type ImportMode = 'json' | 'csv';
 
 const SHAPES = ['almond', 'coffin', 'stiletto', 'square', 'round'];
@@ -254,6 +255,10 @@ export function VendorDashboardClient() {
   const [payouts, setPayouts] = useState<PayoutSummary | null>(null);
   const [payoutsLoading, setPayoutsLoading] = useState(false);
 
+  // Analytics
+  const [analytics, setAnalytics] = useState<AnalyticsRow[] | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
   // Profile edit
   const [profileForm, setProfileForm] = useState({ name: '', tagline: '', description: '', emoji: '', bgColor: '', announcement: '', instagram: '', tiktok: '', pinterest: '', website: '' });
   const [profileSaving, setProfileSaving] = useState(false);
@@ -292,6 +297,14 @@ export function VendorDashboardClient() {
   }, [payouts]);
 
   useEffect(() => { if (tab === 'payouts') loadPayouts(); }, [tab, loadPayouts]);
+
+  const loadAnalytics = useCallback(() => {
+    if (analytics) return;
+    setAnalyticsLoading(true);
+    api.getAnalytics().then(setAnalytics).catch(() => setAnalytics([])).finally(() => setAnalyticsLoading(false));
+  }, [analytics]);
+
+  useEffect(() => { if (tab === 'analytics') loadAnalytics(); }, [tab, loadAnalytics]);
 
   /* Product CRUD */
   function startAdd() { setEditingId(null); setForm(emptyForm()); setFormError(''); setCurrentImageUrl(null); setProductImages([]); setImageUploadError(''); setShowForm(true); }
@@ -542,10 +555,11 @@ export function VendorDashboardClient() {
 
       {/* Tab nav */}
       <div className="tab-nav">
-        {(['overview', 'products', 'import', 'payouts', 'profile'] as Tab[]).map(t => (
+        {(['overview', 'products', 'analytics', 'import', 'payouts', 'profile'] as Tab[]).map(t => (
           <button key={t} className={`tab-btn${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
             {t === 'overview' ? '📊 Overview' :
              t === 'products' ? `💅 Products (${products.length})` :
+             t === 'analytics' ? '📈 Analytics' :
              t === 'import' ? '📥 Import' :
              t === 'payouts' ? '💰 Payouts' : '✏️ Profile'}
           </button>
@@ -971,6 +985,100 @@ export function VendorDashboardClient() {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══ ANALYTICS TAB ══════════════════════════════ */}
+      {tab === 'analytics' && (
+        <div className="fade-in">
+          <div style={{ marginBottom: 20 }}>
+            <p className="eyebrow" style={{ marginBottom: 4 }}>Sales performance</p>
+            <h2 className="section-title" style={{ fontSize: '1.4rem', margin: 0 }}>Product <em>analytics</em></h2>
+          </div>
+
+          {analyticsLoading ? (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="panel" style={{ padding: 18 }}>
+                  <div className="shimmer" style={{ height: 20, width: '50%' }} />
+                </div>
+              ))}
+            </div>
+          ) : !analytics || analytics.length === 0 ? (
+            <div className="panel empty-state">
+              <span className="empty-icon">📈</span>
+              <p>No sales data yet. Analytics will appear once you receive orders.</p>
+            </div>
+          ) : (
+            <>
+              {/* Summary KPIs */}
+              <div className="dashboard-grid" style={{ marginBottom: 24 }}>
+                <div className="card kpi">
+                  <span className="kpi-icon">📦</span>
+                  <strong>{analytics.reduce((s, r) => s + r.orders, 0)}</strong>
+                  <span className="kpi-label">Total orders</span>
+                </div>
+                <div className="card kpi">
+                  <span className="kpi-icon">💅</span>
+                  <strong>{analytics.reduce((s, r) => s + r.units, 0)}</strong>
+                  <span className="kpi-label">Units sold</span>
+                </div>
+                <div className="card kpi kpi-accent">
+                  <strong>${analytics.reduce((s, r) => s + r.revenue, 0).toFixed(2)}</strong>
+                  <span className="kpi-label">Total revenue</span>
+                </div>
+                <div className="card kpi">
+                  <span className="kpi-icon">🏆</span>
+                  <strong>{analytics[0]?.name?.split(' ').slice(0, 3).join(' ') || '—'}</strong>
+                  <span className="kpi-label">Top product</span>
+                </div>
+              </div>
+
+              {/* Per-product table */}
+              <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800 }}>Per-product breakdown</h3>
+                  <span className="chip">{analytics.length} products</span>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.88rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+                        <th style={{ padding: '10px 20px', textAlign: 'left', fontWeight: 800, fontSize: '.74rem', textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)' }}>Product</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 800, fontSize: '.74rem', textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)' }}>Orders</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 800, fontSize: '.74rem', textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)' }}>Units</th>
+                        <th style={{ padding: '10px 20px', textAlign: 'right', fontWeight: 800, fontSize: '.74rem', textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)' }}>Revenue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analytics.map((row, i) => {
+                        const maxRev = analytics[0].revenue || 1;
+                        const barPct = Math.round((row.revenue / maxRev) * 100);
+                        return (
+                          <tr key={row.productId} style={{ borderBottom: i < analytics.length - 1 ? '1px solid var(--border-2)' : 'none' }}>
+                            <td style={{ padding: '12px 20px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 10, background: row.bgColor, display: 'grid', placeItems: 'center', fontSize: '1.1rem', flexShrink: 0 }}>
+                                  {row.emoji}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 700, lineHeight: 1.2 }}>{row.name}</div>
+                                  <div style={{ width: `${barPct}%`, minWidth: 4, height: 3, background: 'var(--accent)', borderRadius: 2, marginTop: 5, opacity: .6 }} />
+                                </div>
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>{row.orders}</td>
+                            <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--muted)' }}>{row.units}</td>
+                            <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 800, color: 'var(--accent)' }}>${row.revenue.toFixed(2)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}

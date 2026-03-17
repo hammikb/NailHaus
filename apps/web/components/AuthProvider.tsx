@@ -9,6 +9,7 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (auth: AuthResponse) => void;
   signOut: () => Promise<void>;
+  updateUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -39,6 +40,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try { await api.logout(); } catch {}
       authStorage.clear();
       setUser(null);
+    },
+    updateUser(updated: User) {
+      setUser(updated);
+      const stored = authStorage.readUser();
+      if (stored) authStorage.save({ token: localStorage.getItem('nh_tok') || '', user: updated });
     },
   }), [user, loading]);
 

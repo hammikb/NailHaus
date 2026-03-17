@@ -25,6 +25,20 @@ export async function getPopularProducts(limit = 8): Promise<Product[]> {
   });
 }
 
+export async function getNewArrivals(limit = 8): Promise<Product[]> {
+  const { data } = await db
+    .from('products')
+    .select('id, vendor_id, name, description, price, original_price, emoji, bg_color, shape, style, badge, stock, tags, availability, production_days, occasions, collection_id, nail_count, image_url, images, sizes, size_inventory, finish, glue_included, reusable, wear_time, hidden, rating, review_count, created_at, vendors!vendor_id(id, name, emoji, bg_color)')
+    .eq('hidden', false)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  return ((data as Record<string, unknown>[]) || []).map((p) => {
+    const vendor = p.vendors as Record<string, unknown> | null;
+    return mapProduct(p, vendor) as unknown as Product;
+  });
+}
+
 export async function getTopVendors(limit = 12): Promise<VendorSummary[]> {
   const { data } = await db
     .from('vendors')

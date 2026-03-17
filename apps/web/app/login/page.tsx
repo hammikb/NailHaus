@@ -17,7 +17,7 @@ export default function LoginPage() {
               <div className="auth-tile" style={{ background: '#fff9c4' }}>🎀</div>
             </div>
             <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div className="auth-trust-row"><span>🛡️</span> Buyer protection on every order</div>
+              <div className="auth-trust-row"><span>📦</span> Fast &amp; tracked shipping</div>
               <div className="auth-trust-row"><span>⭐</span> Verified independent artists</div>
               <div className="auth-trust-row"><span>✉️</span> Real-time shipment tracking</div>
             </div>

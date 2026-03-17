@@ -8,9 +8,9 @@ export function Footer() {
           {/* Brand column */}
           <div className="footer-brand">
             <Link href="/" className="brand" style={{ fontSize: '1.4rem' }}>Nail<em>Haus</em></Link>
-            <p className="footer-tagline">The marketplace for independent press-on nail artists. Handcrafted sets, verified sellers, protected buyers.</p>
+            <p className="footer-tagline">The marketplace for independent press-on nail artists. Handcrafted sets, verified sellers, secure payments.</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-              <span className="footer-badge">🛡️ Buyer protected</span>
+              <span className="footer-badge">🔒 Secure checkout</span>
               <span className="footer-badge">✓ Verified sellers</span>
               <span className="footer-badge">✉️ Tracked shipping</span>
             </div>
@@ -44,6 +44,9 @@ export function Footer() {
             <nav className="footer-links">
               <Link href="/login">Sign in</Link>
               <Link href="/signup">Create account</Link>
+              <Link href="/profile">My profile</Link>
+              <Link href="/orders">My orders</Link>
+              <Link href="/wishlist">Wishlist</Link>
             </nav>
           </div>
         </div>

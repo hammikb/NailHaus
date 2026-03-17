@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ProductCard } from '@/components/ProductCard';
 import { VendorCard } from '@/components/VendorCard';
-import { getPopularProducts, getTopVendors } from '@/lib/queries';
+import { getPopularProducts, getTopVendors, getNewArrivals } from '@/lib/queries';
 
 // Revalidate the home page at most once per minute.
 // Queries Supabase directly — no internal HTTP roundtrip through the API routes.
@@ -17,9 +17,10 @@ const CATEGORIES = [
 ];
 
 export default async function HomePage() {
-  const [products, vendors] = await Promise.all([
+  const [products, vendors, newArrivals] = await Promise.all([
     getPopularProducts(8).catch(() => []),
     getTopVendors().catch(() => []),
+    getNewArrivals(8).catch(() => []),
   ]);
 
   return (
@@ -106,13 +107,31 @@ export default async function HomePage() {
         </section>
       )}
 
+      {/* ─── New Arrivals ───────────────────────── */}
+      {newArrivals.length > 0 && (
+        <section className="section">
+          <div className="container">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Just dropped</p>
+                <h2 className="section-title">New <em>arrivals</em></h2>
+              </div>
+              <Link className="muted" href="/shop?sort=newest">View all →</Link>
+            </div>
+            <div className="grid product-grid">
+              {newArrivals.map(product => <ProductCard key={product.id} product={product} />)}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ─── Trust Strip ────────────────────────── */}
       <section className="section" style={{ padding: '20px 0' }}>
         <div className="container">
           <div className="trust-grid">
             <div className="trust-card">
-              <span className="trust-icon">🛡️</span>
-              <div><div className="trust-title">Buyer protection</div><div className="trust-desc">Covered on every order</div></div>
+              <span className="trust-icon">🔒</span>
+              <div><div className="trust-title">Secure payments</div><div className="trust-desc">Powered by Stripe</div></div>
             </div>
             <div className="trust-card">
               <span className="trust-icon">✉️</span>
