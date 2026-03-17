@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { ProductCard } from '@/components/ProductCard';
 import { api } from '@/lib/api';
@@ -18,6 +18,31 @@ const SORTS = [
 ];
 
 export default function ShopPage() {
+  return (
+    <Suspense fallback={
+      <main className="page-shell">
+        <div className="container">
+          <div className="grid product-grid" style={{ marginTop: 32 }}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="card" style={{ overflow: 'hidden' }}>
+                <div className="shimmer" style={{ height: 210 }} />
+                <div style={{ padding: '18px 20px' }}>
+                  <div className="shimmer" style={{ height: 14, marginBottom: 8, width: '60%' }} />
+                  <div className="shimmer" style={{ height: 18, marginBottom: 12 }} />
+                  <div className="shimmer" style={{ height: 12, width: '80%' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </main>
+    }>
+      <ShopContent />
+    </Suspense>
+  );
+}
+
+function ShopContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
