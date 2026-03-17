@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { data, error } = await supabaseAdmin
-    .from('wishlists')
+    .from('wishlist')
     .select('product_id')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   if (!productId) return err('productId required');
 
   const { error } = await supabaseAdmin
-    .from('wishlists')
+    .from('wishlist')
     .upsert({ user_id: user.id, product_id: productId }, { onConflict: 'user_id,product_id' });
 
   if (error) return err(error.message, 500);

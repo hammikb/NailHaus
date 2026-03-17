@@ -8,7 +8,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ p
   const { productId } = await params;
 
   const { error } = await supabaseAdmin
-    .from('wishlists')
+    .from('wishlist')
     .delete()
     .eq('user_id', user.id)
     .eq('product_id', productId);
