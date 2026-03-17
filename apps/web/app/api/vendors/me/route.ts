@@ -18,6 +18,7 @@ export async function PUT(req: NextRequest) {
   if (body.tags !== undefined) updates.tags = Array.isArray(body.tags) ? body.tags : [];
   if (body.socialLinks !== undefined) updates.social_links = body.socialLinks;
   if (body.announcement !== undefined) updates.announcement = String(body.announcement).slice(0, 240);
+  if (body.shipFromAddress !== undefined) updates.ship_from_address = body.shipFromAddress;
 
   const { data, error } = await supabaseAdmin.from('vendors').update(updates).eq('user_id', user.id).select().single();
   if (error) return err(error.message, 500);

@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { data: vendor } = await supabaseAdmin.from('vendors')
-    .select('id, name, tagline, description, emoji, bg_color, tags, verified, rating, total_sales, total_products, social_links, announcement, collections, created_at, banner_url')
+    .select('id, name, tagline, description, emoji, bg_color, tags, verified, rating, total_sales, total_products, social_links, announcement, collections, created_at, banner_url, ship_from_address')
     .eq('user_id', user.id).single();
   if (!vendor) return err('no_vendor', 404);
 
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     supabaseAdmin.from('products').select('id, vendor_id, name, description, price, original_price, emoji, bg_color, shape, style, badge, stock, tags, availability, production_days, occasions, collection_id, nail_count, image_url, images, sizes, size_inventory, finish, glue_included, reusable, wear_time, hidden, rating, review_count, created_at').eq('vendor_id', vendor.id).order('created_at', { ascending: false }),
     supabaseAdmin.from('reviews').select('*, profiles!user_id(name), products!product_id(id, name)').eq('vendor_id', vendor.id).order('created_at', { ascending: false }),
     supabaseAdmin.from('shipments').select('id, vendor_id, order_id, status, created_at').eq('vendor_id', vendor.id),
-    supabaseAdmin.from('order_items').select('*, orders!order_id(id, user_id, status, shipping_address, created_at)').eq('vendor_id', vendor.id),
+    supabaseAdmin.from('order_items').select('*, orders!order_id(id, user_id, status, shipping_address, created_at), products!product_id(id, name)').eq('vendor_id', vendor.id),
     supabaseAdmin.from('vendor_verification_requests').select('*').eq('vendor_id', vendor.id).eq('status', 'pending').maybeSingle(),
   ]);
 
@@ -52,7 +52,16 @@ export async function GET(req: NextRequest) {
   const fulfillmentQueue = orders
     .filter(o => !shippedOrderIds.has(o.id))
     .sort((a, b) => new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime())
-    .slice(0, 10);
+    .slice(0, 10)
+    .map(o => ({
+      id: o.id,
+      createdAt: o.created_at,
+      status: o.status,
+      shippingAddress: o.shipping_address,
+      items: orderItems
+        .filter((i: Record<string, unknown>) => (i.orders as Record<string, unknown>)?.id === o.id)
+        .map((i: Record<string, unknown>) => ({ qty: Number(i.qty), size: i.size as string | null, product: (i.products as { name: string } | null) ?? null })),
+    }));
 
   const recentReviews = reviews.slice(0, 6).map((r: Record<string, unknown>) =>
     mapReview(r, r.profiles as { name: string } | null, r.products as { id: string; name: string } | null)
@@ -60,7 +69,8 @@ export async function GET(req: NextRequest) {
 
   const recentOrders = orders
     .sort((a, b) => new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime())
-    .slice(0, 5);
+    .slice(0, 5)
+    .map(o => ({ id: o.id, createdAt: o.created_at, status: o.status, total: orderItems.filter((i: Record<string, unknown>) => (i.orders as Record<string, unknown>)?.id === o.id).reduce((s: number, i: Record<string, unknown>) => s + Number(i.price) * Number(i.qty), 0) }));
 
   const vendorMin = { id: vendor.id, name: vendor.name, emoji: vendor.emoji, bg_color: vendor.bg_color };
 

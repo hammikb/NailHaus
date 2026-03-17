@@ -87,6 +87,16 @@ export interface Product {
   reviews?: Review[];
 }
 
+export interface ShippingRate {
+  rateId: string;
+  carrier: string;
+  service: string;
+  carrierCost: number;
+  price: number;
+  deliveryDays: number | null;
+  deliveryDate: string | null;
+}
+
 export interface VendorDetail extends VendorSummary {
   description?: string;
   socialLinks?: Record<string, string>;
@@ -94,6 +104,7 @@ export interface VendorDetail extends VendorSummary {
   collections?: { id: string; name: string; description?: string }[];
   products?: Product[];
   reviews?: Review[];
+  shipFromAddress?: { name?: string; street1?: string; street2?: string; city?: string; state?: string; zip?: string; country?: string } | null;
 }
 
 export interface VendorDashboard {

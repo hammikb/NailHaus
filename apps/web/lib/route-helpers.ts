@@ -73,6 +73,7 @@ export function mapVendor(v: Record<string, unknown>) {
     collections: v.collections || [],
     createdAt: v.created_at,
     bannerUrl: v.banner_url || null,
+    shipFromAddress: (v.ship_from_address as Record<string, string> | null) || null,
   };
 }
 

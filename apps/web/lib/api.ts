@@ -1,4 +1,4 @@
-import { AdminOrder, AdminProduct, AdminStats, AdminUser, AdminVendorRow, AuthResponse, ImportResult, Order, PayoutSummary, Product, User, VendorDashboard, VendorDetail, VendorSummary, VerificationRequest } from './types';
+import { AdminOrder, AdminProduct, AdminStats, AdminUser, AdminVendorRow, AuthResponse, ImportResult, Order, PayoutSummary, Product, ShippingRate, User, VendorDashboard, VendorDetail, VendorSummary, VerificationRequest } from './types';
 
 const TOKEN_KEY = 'nh_tok';
 const USER_KEY = 'nh_usr';
@@ -187,5 +187,12 @@ export const api = {
   },
   toggleVendorVerified(id: string, verified: boolean) {
     return request<{ success: boolean }>(`/admin/vendors/${id}`, { method: 'PUT', body: JSON.stringify({ verified }) });
+  },
+  // Shipping
+  getShippingRates(orderId: string) {
+    return request<{ shipmentId: string; rates: ShippingRate[] }>(`/orders/${orderId}/shipping-rates`);
+  },
+  purchaseLabel(orderId: string, data: { shipmentId: string; rateId: string; carrierCost: number }) {
+    return request<{ shipmentId: string; trackingNumber: string; labelUrl: string; carrier: string; totalCharged: number }>(`/orders/${orderId}/purchase-label`, { method: 'POST', body: JSON.stringify(data) });
   },
 };

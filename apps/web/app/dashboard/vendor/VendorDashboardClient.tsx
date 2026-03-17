@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
-import { ImportResult, PayoutSummary, Product, VendorDashboard } from '@/lib/types';
+import { ImportResult, PayoutSummary, Product, ShippingRate, VendorDashboard } from '@/lib/types';
 
 type Tab = 'overview' | 'products' | 'analytics' | 'import' | 'payouts' | 'profile';
 type AnalyticsRow = { productId: string; name: string; emoji: string; bgColor: string; imageUrl: string | null; orders: number; units: number; revenue: number };
@@ -318,8 +318,18 @@ export function VendorDashboardClient() {
   const [analytics, setAnalytics] = useState<AnalyticsRow[] | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
+  // Shipping
+  const [shippingOrderId, setShippingOrderId] = useState<string | null>(null);
+  const [shippingRates, setShippingRates] = useState<ShippingRate[]>([]);
+  const [shippingShipmentId, setShippingShipmentId] = useState('');
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [shippingError, setShippingError] = useState('');
+  const [selectedRate, setSelectedRate] = useState<ShippingRate | null>(null);
+  const [buyingLabel, setBuyingLabel] = useState(false);
+  const [labelResult, setLabelResult] = useState<{ orderId: string; trackingNumber: string; labelUrl: string; carrier: string } | null>(null);
+
   // Profile edit
-  const [profileForm, setProfileForm] = useState({ name: '', tagline: '', description: '', emoji: '', bgColor: '', announcement: '', instagram: '', tiktok: '', pinterest: '', website: '' });
+  const [profileForm, setProfileForm] = useState({ name: '', tagline: '', description: '', emoji: '', bgColor: '', announcement: '', instagram: '', tiktok: '', pinterest: '', website: '', shipName: '', shipStreet1: '', shipStreet2: '', shipCity: '', shipState: '', shipZip: '', shipCountry: 'US' });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState('');
@@ -331,12 +341,16 @@ export function VendorDashboardClient() {
     api.vendorDashboard().then(d => {
       setData(d); setProducts(d.products);
       const v = d.vendor;
+      const addr = (v as { shipFromAddress?: Record<string, string> | null }).shipFromAddress;
       setProfileForm({
         name: v.name || '', tagline: v.tagline || '', description: v.description || '',
         emoji: v.emoji || '💅', bgColor: v.bgColor || '#fde8e8',
         announcement: v.announcement || '',
         instagram: v.socialLinks?.instagram || '', tiktok: v.socialLinks?.tiktok || '',
         pinterest: v.socialLinks?.pinterest || '', website: v.socialLinks?.website || '',
+        shipName: addr?.name || '', shipStreet1: addr?.street1 || '', shipStreet2: addr?.street2 || '',
+        shipCity: addr?.city || '', shipState: addr?.state || '', shipZip: addr?.zip || '',
+        shipCountry: addr?.country || 'US',
       });
       setBannerUrl(v.bannerUrl || null);
     }).catch(err => setError(err.message));
@@ -576,6 +590,10 @@ export function VendorDashboardClient() {
         description: profileForm.description, emoji: profileForm.emoji,
         bgColor: profileForm.bgColor, announcement: profileForm.announcement,
         socialLinks: { instagram: profileForm.instagram, tiktok: profileForm.tiktok, pinterest: profileForm.pinterest, website: profileForm.website },
+        shipFromAddress: {
+          name: profileForm.shipName, street1: profileForm.shipStreet1, street2: profileForm.shipStreet2,
+          city: profileForm.shipCity, state: profileForm.shipState, zip: profileForm.shipZip, country: profileForm.shipCountry || 'US',
+        },
       });
       setProfileSaved(true);
       loadDashboard();
@@ -583,6 +601,42 @@ export function VendorDashboardClient() {
     } catch (err: unknown) {
       setProfileError(err instanceof Error ? err.message : 'Save failed');
     } finally { setProfileSaving(false); }
+  }
+
+  /* Shipping */
+  async function fetchShippingRates(orderId: string) {
+    setShippingOrderId(orderId);
+    setShippingRates([]);
+    setSelectedRate(null);
+    setShippingError('');
+    setShippingLoading(true);
+    try {
+      const { shipmentId, rates } = await api.getShippingRates(orderId);
+      setShippingShipmentId(shipmentId);
+      setShippingRates(rates);
+    } catch (e: unknown) {
+      setShippingError(e instanceof Error ? e.message : 'Could not fetch rates');
+    } finally {
+      setShippingLoading(false);
+    }
+  }
+
+  async function buyLabel() {
+    if (!shippingOrderId || !selectedRate) return;
+    setBuyingLabel(true);
+    setShippingError('');
+    try {
+      const result = await api.purchaseLabel(shippingOrderId, { shipmentId: shippingShipmentId, rateId: selectedRate.rateId, carrierCost: selectedRate.carrierCost });
+      setLabelResult({ orderId: shippingOrderId, trackingNumber: result.trackingNumber, labelUrl: result.labelUrl, carrier: result.carrier });
+      setShippingOrderId(null);
+      setShippingRates([]);
+      setSelectedRate(null);
+      loadDashboard();
+    } catch (e: unknown) {
+      setShippingError(e instanceof Error ? e.message : 'Failed to purchase label');
+    } finally {
+      setBuyingLabel(false);
+    }
   }
 
   /* Loading / error states */
@@ -643,6 +697,19 @@ export function VendorDashboardClient() {
         </div>
       )}
 
+      {/* Label purchased success */}
+      {labelResult && (
+        <div className="alert alert-success fade-in" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+          <div>
+            <strong>📦 Label purchased!</strong> Order #{labelResult.orderId.slice(0, 8)} — {labelResult.carrier} tracking: <strong>{labelResult.trackingNumber}</strong>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <a href={labelResult.labelUrl} target="_blank" rel="noreferrer" className="pill btn-primary btn-sm">🖨️ Print label</a>
+            <button className="pill btn-ghost btn-sm" onClick={() => setLabelResult(null)}>✕</button>
+          </div>
+        </div>
+      )}
+
       {/* Tab nav */}
       <div className="tab-nav">
         {(['overview', 'products', 'analytics', 'import', 'payouts', 'profile'] as Tab[]).map(t => (
@@ -694,14 +761,60 @@ export function VendorDashboardClient() {
               </div>
               <div style={{ padding: '12px 20px', display: 'grid', gap: 10 }}>
                 {data.fulfillmentQueue.map(order => (
-                  <div key={order.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 700, marginBottom: 3 }}>Order #{order.id.slice(0, 8)}</div>
-                      <div className="muted" style={{ fontSize: '.83rem' }}>
-                        {order.items.map((item, i) => <span key={i}>{item.qty}× {item.product?.name || 'Product'}{i < order.items.length - 1 ? ', ' : ''}</span>)}
+                  <div key={order.id} className="list-item" style={{ padding: '12px 16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, marginBottom: 3 }}>Order #{order.id.slice(0, 8)}</div>
+                        <div className="muted" style={{ fontSize: '.83rem' }}>
+                          {(order.items || []).map((item, i) => <span key={i}>{item.qty}× {item.product?.name || 'Product'}{i < (order.items || []).length - 1 ? ', ' : ''}</span>)}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span className="muted" style={{ fontSize: '.82rem' }}>{new Date(order.createdAt).toLocaleDateString()}</span>
+                        <button
+                          className="pill btn-primary btn-sm"
+                          onClick={() => fetchShippingRates(order.id)}
+                          disabled={shippingLoading && shippingOrderId === order.id}
+                        >
+                          {shippingLoading && shippingOrderId === order.id ? 'Loading…' : '📦 Get rates'}
+                        </button>
                       </div>
                     </div>
-                    <div className="muted" style={{ fontSize: '.82rem' }}>{new Date(order.createdAt).toLocaleDateString()}</div>
+
+                    {/* Shipping rate selector for this order */}
+                    {shippingOrderId === order.id && (
+                      <div className="panel fade-in" style={{ marginTop: 12, padding: 16, background: 'var(--surface-2)' }}>
+                        {shippingError && <div className="error" style={{ marginBottom: 10 }}>{shippingError}</div>}
+                        {shippingLoading && <div className="muted" style={{ fontSize: '.88rem' }}>Fetching rates…</div>}
+                        {!shippingLoading && shippingRates.length > 0 && (
+                          <>
+                            <div style={{ fontWeight: 700, fontSize: '.88rem', marginBottom: 10 }}>Choose a shipping rate:</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                              {shippingRates.map(rate => (
+                                <label key={rate.rateId} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 12px', borderRadius: 10, border: `1.5px solid ${selectedRate?.rateId === rate.rateId ? 'var(--accent)' : 'var(--border)'}`, background: selectedRate?.rateId === rate.rateId ? 'var(--accent-soft)' : 'var(--surface)' }}>
+                                  <input type="radio" name={`rate-${order.id}`} checked={selectedRate?.rateId === rate.rateId} onChange={() => setSelectedRate(rate)} />
+                                  <div style={{ flex: 1 }}>
+                                    <span style={{ fontWeight: 700 }}>{rate.carrier} {rate.service}</span>
+                                    {rate.deliveryDays != null && <span className="muted" style={{ fontSize: '.8rem', marginLeft: 8 }}>{rate.deliveryDays} day{rate.deliveryDays !== 1 ? 's' : ''}</span>}
+                                  </div>
+                                  <span style={{ fontWeight: 800 }}>${rate.price.toFixed(2)}</span>
+                                  <span className="muted" style={{ fontSize: '.72rem' }}>(carrier: ${rate.carrierCost.toFixed(2)} + $1.00)</span>
+                                </label>
+                              ))}
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button className="pill btn-primary" onClick={buyLabel} disabled={!selectedRate || buyingLabel}>
+                                {buyingLabel ? 'Purchasing…' : `Buy label · $${(selectedRate?.price ?? 0).toFixed(2)}`}
+                              </button>
+                              <button className="pill btn-ghost btn-sm" onClick={() => { setShippingOrderId(null); setShippingRates([]); setSelectedRate(null); setShippingError(''); }}>Cancel</button>
+                            </div>
+                          </>
+                        )}
+                        {!shippingLoading && shippingRates.length === 0 && !shippingError && (
+                          <div className="muted" style={{ fontSize: '.88rem' }}>No rates available. Make sure your ship-from address is set in Profile.</div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1488,6 +1601,44 @@ export function VendorDashboardClient() {
               </Field>
               <Field label="🌐 Website">
                 <input style={FI} value={profileForm.website} onChange={e => setProfileForm(f => ({ ...f, website: e.target.value }))} placeholder="https://yoursite.com" />
+              </Field>
+            </div>
+
+            <hr className="divider" />
+            <div className="muted" style={{ fontSize: '.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>📦 Ship-from address</div>
+            <p className="muted" style={{ fontSize: '.8rem', margin: '0 0 14px' }}>Required to calculate and purchase shipping labels for your orders.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Field label="Full name / business name">
+                  <input style={FI} value={profileForm.shipName} onChange={e => setProfileForm(f => ({ ...f, shipName: e.target.value }))} placeholder="Jane Doe" />
+                </Field>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Field label="Street address">
+                  <input style={FI} value={profileForm.shipStreet1} onChange={e => setProfileForm(f => ({ ...f, shipStreet1: e.target.value }))} placeholder="123 Main St" />
+                </Field>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Field label="Apt / suite (optional)">
+                  <input style={FI} value={profileForm.shipStreet2} onChange={e => setProfileForm(f => ({ ...f, shipStreet2: e.target.value }))} placeholder="Apt 2B" />
+                </Field>
+              </div>
+              <Field label="City">
+                <input style={FI} value={profileForm.shipCity} onChange={e => setProfileForm(f => ({ ...f, shipCity: e.target.value }))} placeholder="New York" />
+              </Field>
+              <Field label="State">
+                <input style={FI} value={profileForm.shipState} onChange={e => setProfileForm(f => ({ ...f, shipState: e.target.value }))} placeholder="NY" maxLength={3} />
+              </Field>
+              <Field label="ZIP / postal code">
+                <input style={FI} value={profileForm.shipZip} onChange={e => setProfileForm(f => ({ ...f, shipZip: e.target.value }))} placeholder="10001" />
+              </Field>
+              <Field label="Country">
+                <select style={FI} value={profileForm.shipCountry} onChange={e => setProfileForm(f => ({ ...f, shipCountry: e.target.value }))}>
+                  <option value="US">United States</option>
+                  <option value="CA">Canada</option>
+                  <option value="GB">United Kingdom</option>
+                  <option value="AU">Australia</option>
+                </select>
               </Field>
             </div>
 
