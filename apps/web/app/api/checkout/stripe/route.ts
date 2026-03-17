@@ -8,8 +8,9 @@ function getStripe() {
 
 export async function POST(req: NextRequest) {
   const stripe = getStripe();
+
+  // Auth is optional — guests can check out without an account
   const user = await getAuthUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
   const { items } = body as { items: { productId: string; qty: number; size?: string }[] };
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
     if (!product) return err(`Product not found: ${item.productId}`, 404);
 
     const qty = Math.max(1, item.qty || 1);
-    const unitAmount = Math.round(Number(product.price) * 100); // cents
+    const unitAmount = Math.round(Number(product.price) * 100);
 
     lineItems.push({
       quantity: qty,
@@ -57,10 +58,10 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Create a pending order first so we have an ID to attach to the session
+  // Create a pending order — user_id is null for guests
   const total = orderItems.reduce((s, i) => s + i.price * i.qty, 0);
   const { data: order, error: orderError } = await supabaseAdmin.from('orders').insert({
-    user_id: user.id,
+    user_id: user?.id ?? null,
     total: Math.round(total * 100) / 100,
     original_total: Math.round(total * 100) / 100,
     status: 'pending_payment',
@@ -79,17 +80,21 @@ export async function POST(req: NextRequest) {
     }))
   );
 
-  const session = await stripe.checkout.sessions.create({
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: 'payment',
     line_items: lineItems,
-    customer_email: user.email,
-    metadata: { orderId: order.id, userId: user.id },
+    // For guests Stripe will collect the email; for logged-in users prefill it
+    ...(user?.email ? { customer_email: user.email } : {}),
+    // Always create a Stripe customer so we reliably get customer_details in the webhook
+    customer_creation: 'always',
+    metadata: { orderId: order.id, userId: user?.id ?? '' },
     success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/cart`,
     shipping_address_collection: { allowed_countries: ['US', 'CA', 'GB', 'AU'] },
-  });
+  };
 
-  // Store stripe session ID on order for webhook lookup
+  const session = await stripe.checkout.sessions.create(sessionParams);
+
   await supabaseAdmin.from('orders').update({ stripe_session_id: session.id }).eq('id', order.id);
 
   return NextResponse.json({ url: session.url });

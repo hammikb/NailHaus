@@ -16,12 +16,7 @@ export default function CartPage() {
   const [success, setSuccess] = useState('');
 
   async function handleCheckout() {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
     if (!items.length) return;
-
     setPlacing(true);
     setError('');
     try {
@@ -159,22 +154,22 @@ export default function CartPage() {
 
               {error && <div className="error" style={{ marginBottom: 14 }}>{error}</div>}
 
-              {!user && (
-                <div className="alert alert-info" style={{ marginBottom: 14 }}>
-                  <span>
-                    Please <Link href="/login" style={{ fontWeight: 700, color: 'var(--info)' }}>sign in</Link> to place your order.
-                  </span>
-                </div>
-              )}
-
               <button
                 className="pill btn-primary"
                 style={{ width: '100%', justifyContent: 'center', fontSize: '1rem', padding: 14 }}
                 disabled={placing || !items.length}
                 onClick={handleCheckout}
               >
-                {placing ? 'Placing order...' : user ? `Place order · $${total.toFixed(2)}` : 'Sign in to checkout'}
+                {placing ? 'Redirecting to checkout…' : `Checkout · $${total.toFixed(2)}`}
               </button>
+
+              {!user && (
+                <p className="muted" style={{ fontSize: '.78rem', textAlign: 'center', marginTop: 10 }}>
+                  Checking out as guest.{' '}
+                  <Link href="/login" style={{ color: 'var(--accent)', fontWeight: 600 }}>Sign in</Link>{' '}
+                  to track your orders.
+                </p>
+              )}
 
               <Link href="/shop" className="pill btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}>
                 Continue shopping

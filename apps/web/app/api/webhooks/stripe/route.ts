@@ -89,32 +89,44 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Send buyer confirmation email
+    // Send buyer confirmation email (works for both signed-in users and guests)
     const { data: order } = await supabaseAdmin
       .from('orders')
       .select('user_id, total')
       .eq('id', orderId)
       .single();
+
+    let buyerEmail: string | null = null;
+    let buyerName = 'there';
+
     if (order?.user_id) {
+      // Signed-in user — look up their profile
       const { data: buyerProfile } = await supabaseAdmin
         .from('profiles')
         .select('name, email')
         .eq('id', order.user_id)
         .single();
-      if (buyerProfile?.email && orderItems) {
-        await sendOrderConfirmation({
-          to: buyerProfile.email,
-          buyerName: buyerProfile.name || 'there',
-          orderId,
-          total: order.total,
-          items: orderItems.map((i) => ({
-            name: (i.products as unknown as { name: string } | null)?.name || 'Product',
-            qty: i.qty,
-            price: i.price,
-            size: (i as { size?: string }).size,
-          })),
-        });
-      }
+      buyerEmail = buyerProfile?.email ?? null;
+      buyerName = buyerProfile?.name || 'there';
+    } else {
+      // Guest — use the email Stripe collected at checkout
+      buyerEmail = session.customer_details?.email ?? session.customer_email ?? null;
+      buyerName = session.customer_details?.name ?? 'there';
+    }
+
+    if (buyerEmail && orderItems) {
+      await sendOrderConfirmation({
+        to: buyerEmail,
+        buyerName,
+        orderId,
+        total: order?.total ?? 0,
+        items: orderItems.map((i) => ({
+          name: (i.products as unknown as { name: string } | null)?.name || 'Product',
+          qty: i.qty,
+          price: i.price,
+          size: (i as { size?: string }).size,
+        })),
+      });
     }
   }
 
