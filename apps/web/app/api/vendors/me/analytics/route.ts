@@ -13,8 +13,11 @@ export async function GET(req: NextRequest) {
 
   if (!vendor) return err('Vendor not found', 404);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabaseAdmin as any;
+
   // Per-product order counts and revenue from order_items
-  const { data: items, error } = await supabaseAdmin
+  const { data: items, error } = await db
     .from('order_items')
     .select('product_id, qty, price, products!product_id(id, name, emoji, bg_color, image_url)')
     .eq('vendor_id', vendor.id);
@@ -26,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   for (const item of (items || [])) {
     const pid = item.product_id as string;
-    const product = item.products as { id: string; name: string; emoji: string; bg_color: string; image_url: string | null } | null;
+    const product = (item.products as unknown) as { id: string; name: string; emoji: string; bg_color: string; image_url: string | null } | null;
     const existing = map.get(pid);
     if (existing) {
       existing.orders += 1;
