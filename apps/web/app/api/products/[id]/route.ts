@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, getAuthUser, mapProduct, mapReview, err } from '@/lib/route-helpers';
+import { sendRestockNotification } from '@/lib/email';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,11 +34,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const user = await getAuthUser(req);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: product } = await supabaseAdmin.from('products').select('vendor_id').eq('id', id).single();
+  const { data: product } = await supabaseAdmin.from('products').select('vendor_id, stock, size_inventory, name, availability').eq('id', id).single();
   if (!product) return err('Not found', 404);
 
   const { data: vendor } = await supabaseAdmin.from('vendors').select('id').eq('user_id', user.id).single();
   if (!vendor || product.vendor_id !== vendor.id) return err('Forbidden', 403);
+
+  const prevStock: number = product.stock ?? 0;
+  const prevAvailability: string = product.availability ?? '';
 
   const body = await req.json().catch(() => ({}));
   const updates: Record<string, unknown> = {};
@@ -66,6 +70,27 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: updated, error } = await supabaseAdmin.from('products').update(updates).eq('id', id).select('*, vendors!vendor_id(id, name, emoji, bg_color)').single();
   if (error) return err(error.message, 500);
+
+  // Trigger restock notifications if product went from out-of-stock to in-stock
+  const newStock: number = (updates.stock as number | undefined) ?? prevStock;
+  const newAvailability: string = (updates.availability as string | undefined) ?? prevAvailability;
+  const wasOutOfStock = prevAvailability !== 'made_to_order' && prevStock === 0;
+  const isNowInStock = newAvailability !== 'made_to_order' && newStock > 0;
+  if (wasOutOfStock && isNowInStock) {
+    const { data: waitlist } = await supabaseAdmin
+      .from('waitlists')
+      .select('email')
+      .eq('product_id', id);
+    if (waitlist && waitlist.length > 0) {
+      await Promise.allSettled(
+        waitlist.map(({ email }: { email: string }) =>
+          sendRestockNotification({ to: email, productName: product.name, productId: id })
+        )
+      );
+      // Clear notified waitlist entries
+      await supabaseAdmin.from('waitlists').delete().eq('product_id', id);
+    }
+  }
 
   return NextResponse.json(mapProduct(updated, updated.vendors));
 }

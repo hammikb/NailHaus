@@ -6,6 +6,8 @@ import { ReviewForm } from '@/components/ReviewForm';
 import { WishlistButton } from '@/components/WishlistButton';
 import { ProductGallery } from '@/components/ProductGallery';
 import { ProductCard } from '@/components/ProductCard';
+import { ViewRecorder } from '@/components/RecentlyViewed';
+import { NailTryOn } from '@/components/NailTryOn';
 import { mapProduct, mapReview, supabaseAdmin } from '@/lib/route-helpers';
 import type { Product, Review, VendorSummary } from '@/lib/types';
 
@@ -123,6 +125,15 @@ export default async function ProductDetailPage({
 
   return (
     <main className="page-shell">
+      <ViewRecorder item={{
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        emoji: product.emoji,
+        bgColor: product.bgColor,
+        vendorName: product.vendor?.name,
+        imageUrl: product.imageUrl,
+      }} />
       <div className="container">
         <div className="breadcrumb">
           <Link href="/shop">Shop</Link>
@@ -265,6 +276,28 @@ export default async function ProductDetailPage({
               )}
             </div>
 
+            {/* Estimated delivery */}
+            {!isOutOfStock && (() => {
+              const productionDays = product.availability === 'made_to_order' ? (product.productionDays || 7) : 0;
+              const minShip = productionDays + 3;
+              const maxShip = productionDays + 7;
+              const now = new Date();
+              const minDate = new Date(now); minDate.setDate(now.getDate() + minShip);
+              const maxDate = new Date(now); maxDate.setDate(now.getDate() + maxShip);
+              const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 18, fontSize: '.85rem', color: 'var(--muted)' }}>
+                  <span>📦</span>
+                  <span>
+                    {product.availability === 'made_to_order'
+                      ? `Made to order · `
+                      : `In stock · `}
+                    <strong style={{ color: 'var(--text)' }}>Est. delivery {fmt(minDate)}–{fmt(maxDate)}</strong>
+                  </span>
+                </div>
+              );
+            })()}
+
             <p className="subtle" style={{ marginBottom: 20, lineHeight: 1.7 }}>
               {product.description}
             </p>
@@ -355,6 +388,12 @@ export default async function ProductDetailPage({
               }}
             />
             <WishlistButton productId={product.id} style={{ marginTop: 10 }} />
+            <NailTryOn
+              productName={product.name}
+              nailImageUrl={product.imageUrl || null}
+              nailEmoji={product.emoji}
+              nailBgColor={product.bgColor}
+            />
           </div>
         </div>
 

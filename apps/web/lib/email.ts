@@ -70,6 +70,40 @@ export async function sendOrderConfirmation({
   }).catch(() => {}); // never block the webhook
 }
 
+export async function sendRestockNotification({
+  to,
+  productName,
+  productId,
+}: {
+  to: string;
+  productName: string;
+  productId: string;
+}) {
+  const resend = getResend();
+  if (!resend) return;
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `${productName} is back in stock! 💅`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#2d1a2e;">
+        <div style="background:linear-gradient(135deg,#fce4f5,#fde8e8);padding:28px 24px;border-radius:16px 16px 0 0;text-align:center;">
+          <div style="font-size:36px;margin-bottom:8px;">💅</div>
+          <h1 style="margin:0;font-size:22px;color:#9a4a7a;">Back in stock!</h1>
+          <p style="margin:8px 0 0;color:#7a3a6a;font-size:14px;">Good news — <strong>${productName}</strong> is available again.</p>
+        </div>
+        <div style="background:#fff;padding:24px;border-radius:0 0 16px 16px;border:1px solid #f0e0eb;">
+          <p style="color:#7a3a6a;font-size:14px;margin:0 0 20px;">Get it before it sells out again — these go fast!</p>
+          <div style="text-align:center;">
+            <a href="${SITE}/products/${productId}" style="display:inline-block;background:#c45990;color:#fff;text-decoration:none;padding:12px 28px;border-radius:999px;font-weight:700;font-size:14px;">Shop now →</a>
+          </div>
+          <p style="margin-top:20px;font-size:11px;color:#b07090;text-align:center;">You're receiving this because you joined the waitlist for this product.</p>
+        </div>
+      </div>`,
+  }).catch(() => {});
+}
+
 export async function sendVendorNewOrderNotification({
   to,
   vendorName,

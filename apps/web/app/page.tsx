@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { ProductCard } from '@/components/ProductCard';
 import { VendorCard } from '@/components/VendorCard';
-import { getPopularProducts, getTopVendors, getNewArrivals } from '@/lib/queries';
+import { RecentlyViewedStrip } from '@/components/RecentlyViewed';
+import { SocialProofTicker } from '@/components/SocialProofTicker';
+import { getPopularProducts, getTopVendors, getNewArrivals, getEditorialLooks } from '@/lib/queries';
 
 // Revalidate the home page at most once per minute.
 // Queries Supabase directly — no internal HTTP roundtrip through the API routes.
@@ -17,10 +19,11 @@ const CATEGORIES = [
 ];
 
 export default async function HomePage() {
-  const [products, vendors, newArrivals] = await Promise.all([
+  const [products, vendors, newArrivals, editorialLooks] = await Promise.all([
     getPopularProducts(8).catch(() => []),
     getTopVendors().catch(() => []),
     getNewArrivals(8).catch(() => []),
+    getEditorialLooks().catch(() => []),
   ]);
 
   return (
@@ -67,6 +70,9 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ─── Social Proof Ticker ────────────────── */}
+      <SocialProofTicker />
 
       {/* ─── Categories ─────────────────────────── */}
       <section className="section" style={{ paddingTop: 8 }}>
@@ -124,6 +130,42 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      {/* ─── Editorial / Trending Looks ─────────── */}
+      {editorialLooks.length > 0 && (
+        <section className="section">
+          <div className="container">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Curated by us</p>
+                <h2 className="section-title">Trending <em>looks</em></h2>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+              {editorialLooks.map(look => {
+                if (!look.products.length) return null;
+                return (
+                  <div key={look.id}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                      <span style={{ fontSize: '1.6rem' }}>{look.emoji}</span>
+                      <div>
+                        <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.1rem' }}>{look.title}</h3>
+                        {look.subtitle && <p className="muted" style={{ margin: 0, fontSize: '.85rem' }}>{look.subtitle}</p>}
+                      </div>
+                    </div>
+                    <div className="grid product-grid">
+                      {look.products.map(p => <ProductCard key={p.id} product={p} />)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ─── Recently Viewed ────────────────────── */}
+      <RecentlyViewedStrip />
 
       {/* ─── Trust Strip ────────────────────────── */}
       <section className="section" style={{ padding: '20px 0' }}>

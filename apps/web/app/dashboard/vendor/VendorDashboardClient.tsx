@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import { ImportResult, PayoutSummary, Product, ShippingRate, VendorDashboard } from '@/lib/types';
 
-type Tab = 'overview' | 'products' | 'analytics' | 'import' | 'payouts' | 'profile';
+type Tab = 'overview' | 'products' | 'analytics' | 'import' | 'payouts' | 'insights' | 'subscriptions' | 'profile';
 type AnalyticsRow = { productId: string; name: string; emoji: string; bgColor: string; imageUrl: string | null; orders: number; units: number; revenue: number };
 type ImportMode = 'json' | 'csv' | 'etsy';
 
@@ -712,13 +712,15 @@ export function VendorDashboardClient() {
 
       {/* Tab nav */}
       <div className="tab-nav">
-        {(['overview', 'products', 'analytics', 'import', 'payouts', 'profile'] as Tab[]).map(t => (
+        {(['overview', 'products', 'analytics', 'import', 'payouts', 'insights', 'subscriptions', 'profile'] as Tab[]).map(t => (
           <button key={t} className={`tab-btn${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
             {t === 'overview' ? '📊 Overview' :
              t === 'products' ? `💅 Products (${products.length})` :
              t === 'analytics' ? '📈 Analytics' :
              t === 'import' ? '📥 Import' :
-             t === 'payouts' ? '💰 Payouts' : '✏️ Profile'}
+             t === 'payouts' ? '💰 Payouts' :
+             t === 'insights' ? '💡 Insights' :
+             t === 'subscriptions' ? '📦 Subscriptions' : '✏️ Profile'}
           </button>
         ))}
       </div>
@@ -1507,6 +1509,12 @@ export function VendorDashboardClient() {
         </div>
       )}
 
+      {/* ═══ INSIGHTS TAB ══════════════════════════════ */}
+      {tab === 'insights' && <InsightsTab />}
+
+      {/* ═══ SUBSCRIPTIONS TAB ═════════════════════════ */}
+      {tab === 'subscriptions' && <SubscriptionPlansTab />}
+
       {/* ═══ PROFILE TAB ═══════════════════════════════ */}
       {tab === 'profile' && (
         <div className="fade-in" style={{ maxWidth: 680 }}>
@@ -1651,6 +1659,151 @@ export function VendorDashboardClient() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── Subscription Plans Tab ────────────────────────── */
+type SubPlan = { id: string; name: string; description?: string; price_monthly: number; items_per_month: number; active: boolean };
+
+function SubscriptionPlansTab() {
+  const [plans, setPlans] = useState<SubPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ name: '', description: '', priceMonthly: '', itemsPerMonth: '1', stripePriceId: '' });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  function authFetch(path: string, opts?: RequestInit) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('nh_tok') : null;
+    return fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(opts?.headers || {}) }, credentials: 'include' });
+  }
+
+  useEffect(() => {
+    authFetch('/api/vendors/me/subscription-plans')
+      .then(r => r.json()).then(setPlans).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  async function createPlan() {
+    if (!form.name || !form.priceMonthly) { setMsg('Name and price are required.'); return; }
+    setSaving(true); setMsg('');
+    try {
+      const res = await authFetch('/api/vendors/me/subscription-plans', { method: 'POST', body: JSON.stringify({ name: form.name, description: form.description, priceMonthly: form.priceMonthly, itemsPerMonth: form.itemsPerMonth, stripePriceId: form.stripePriceId }) });
+      const data = await res.json();
+      if (!res.ok) { setMsg(data.error || 'Error creating plan'); return; }
+      setPlans(p => [data, ...p]);
+      setForm({ name: '', description: '', priceMonthly: '', itemsPerMonth: '1', stripePriceId: '' });
+      setMsg('✓ Plan created!');
+    } catch { setMsg('Something went wrong.'); }
+    finally { setSaving(false); }
+  }
+
+  async function deletePlan(id: string) {
+    if (!confirm('Deactivate this plan?')) return;
+    await authFetch('/api/vendors/me/subscription-plans', { method: 'DELETE', body: JSON.stringify({ id }) });
+    setPlans(p => p.filter(x => x.id !== id));
+  }
+
+  return (
+    <div className="fade-in" style={{ maxWidth: 680 }}>
+      <h2 className="section-title" style={{ fontSize: '1.4rem', marginBottom: 6 }}>Subscription <em>plans</em></h2>
+      <p className="muted" style={{ marginBottom: 24, fontSize: '.9rem' }}>Offer monthly nail box subscriptions. Customers subscribe and get sets delivered each month.</p>
+
+      <div className="panel" style={{ padding: 24, marginBottom: 24 }}>
+        <h3 style={{ margin: '0 0 16px', fontWeight: 800, fontSize: '1rem' }}>Create a plan</h3>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <input className="field-input" placeholder="Plan name (e.g. Monthly Glam Box)" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          <textarea className="field-input" placeholder="Description (optional)" rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} style={{ resize: 'vertical' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div><label className="field-label">Monthly price ($)</label><input className="field-input" type="number" min="1" step="0.01" placeholder="19.99" value={form.priceMonthly} onChange={e => setForm(f => ({ ...f, priceMonthly: e.target.value }))} /></div>
+            <div><label className="field-label">Sets per month</label><input className="field-input" type="number" min="1" max="10" value={form.itemsPerMonth} onChange={e => setForm(f => ({ ...f, itemsPerMonth: e.target.value }))} /></div>
+          </div>
+          <div><label className="field-label">Stripe Price ID (optional — for recurring billing)</label><input className="field-input" placeholder="price_xxxxx" value={form.stripePriceId} onChange={e => setForm(f => ({ ...f, stripePriceId: e.target.value }))} /></div>
+          {msg && <div className={msg.startsWith('✓') ? 'success' : 'error'}>{msg}</div>}
+          <button className="pill btn-primary" onClick={createPlan} disabled={saving} style={{ alignSelf: 'flex-start' }}>{saving ? 'Creating…' : 'Create plan'}</button>
+        </div>
+      </div>
+
+      {loading ? [...Array(2)].map((_, i) => <div key={i} className="shimmer" style={{ height: 80, marginBottom: 10, borderRadius: 14 }} />) : plans.length === 0 ? (
+        <div className="panel empty-state" style={{ padding: 28 }}><p className="muted">No plans yet. Create one above.</p></div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {plans.map(plan => (
+            <div key={plan.id} className="panel" style={{ padding: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 800 }}>{plan.name}</div>
+                {plan.description && <div className="muted" style={{ fontSize: '.82rem' }}>{plan.description}</div>}
+                <div style={{ fontSize: '.82rem', marginTop: 4 }}>${plan.price_monthly}/mo · {plan.items_per_month} set{plan.items_per_month !== 1 ? 's' : ''}/month</div>
+              </div>
+              <button className="pill btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => deletePlan(plan.id)}>Deactivate</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Insights Tab Component ────────────────────────── */
+type InsightRow = { id: string; name: string; emoji: string; bg_color: string; price: number; image_url: string | null; wishlistCount?: number; waitlistCount?: number };
+
+function InsightsTab() {
+  const [data, setData] = useState<{ wishlistInsights: InsightRow[]; waitlistInsights: InsightRow[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('nh_tok') : null;
+    fetch('/api/vendors/me/insights', {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      credentials: 'include',
+    })
+      .then(r => r.json())
+      .then(setData)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="fade-in">
+      {[...Array(4)].map((_, i) => <div key={i} className="shimmer" style={{ height: 60, marginBottom: 10, borderRadius: 12 }} />)}
+    </div>
+  );
+
+  const { wishlistInsights = [], waitlistInsights = [] } = data || {};
+
+  function InsightList({ rows, countKey, label }: { rows: InsightRow[]; countKey: 'wishlistCount' | 'waitlistCount'; label: string }) {
+    if (!rows.length) return <div className="panel empty-state" style={{ padding: 28 }}><p className="muted">No {label} data yet.</p></div>;
+    return (
+      <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+        {rows.map((row, i) => (
+          <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none' }}>
+            <span style={{ fontWeight: 800, color: 'var(--muted)', width: 22, textAlign: 'center', fontSize: '.85rem' }}>#{i + 1}</span>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: row.bg_color || '#fde8e8', display: 'grid', placeItems: 'center', fontSize: '1.4rem', overflow: 'hidden', flexShrink: 0 }}>
+              {row.image_url ? <img src={row.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : row.emoji}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: '.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</div>
+              <div className="muted" style={{ fontSize: '.78rem' }}>${row.price}</div>
+            </div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--accent)' }}>{row[countKey]}</div>
+              <div className="muted" style={{ fontSize: '.72rem' }}>{label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-in" style={{ maxWidth: 720 }}>
+      <h2 className="section-title" style={{ fontSize: '1.4rem', marginBottom: 6 }}>Customer <em>insights</em></h2>
+      <p className="muted" style={{ marginBottom: 28, fontSize: '.9rem' }}>See which products customers are saving and watching — demand signals to help you restock and promote.</p>
+
+      <h3 style={{ fontWeight: 800, fontSize: '1rem', marginBottom: 12 }}>❤️ Most Wishlisted</h3>
+      <InsightList rows={wishlistInsights} countKey="wishlistCount" label="saves" />
+
+      <h3 style={{ fontWeight: 800, fontSize: '1rem', margin: '28px 0 12px' }}>🔔 Most Waitlisted</h3>
+      <InsightList rows={waitlistInsights} countKey="waitlistCount" label="waiting" />
     </div>
   );
 }

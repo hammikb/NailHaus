@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ProductCard } from '@/components/ProductCard';
+import { FollowButton } from '@/components/FollowButton';
+import { BundleSection } from '@/components/BundleSection';
 import { supabaseAdmin, mapVendor, mapProduct, mapReview } from '@/lib/route-helpers';
 import type { VendorDetail, Product } from '@/lib/types';
 
@@ -126,6 +128,7 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
                 )}
                 {memberSince && <span className="muted">Member since {memberSince}</span>}
               </div>
+              <FollowButton vendorId={id} style={{ marginTop: 12 }} />
               {socialEntries.length > 0 && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
                   {socialEntries.map(([platform, url]) => (
@@ -210,6 +213,8 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
             <p>No products listed yet.</p>
           </div>
         )}
+
+        <BundleSection vendorId={id} vendorName={vendor.name} />
 
         {vendor.reviews?.length ? (
           <section className="section">

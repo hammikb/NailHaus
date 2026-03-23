@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useCart } from './CartProvider';
 import { NailSizingGuide } from './NailSizingGuide';
+
+const SIZE_PROFILE_KEY = 'nh_size_profile';
 
 interface ProductForCart {
   id: string;
@@ -34,6 +36,22 @@ export function AddToCartSection({ product }: { product: ProductForCart }) {
   const [added, setAdded] = useState(false);
   const [waitlistEmail, setWaitlistEmail] = useState('');
   const [waitlistStatus, setWaitlistStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [savedSize, setSavedSize] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SIZE_PROFILE_KEY);
+      if (stored) setSavedSize(stored);
+    } catch {}
+  }, []);
+
+  function saveProfile(size: string) {
+    try { localStorage.setItem(SIZE_PROFILE_KEY, size); } catch {}
+    setSavedSize(size);
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 2000);
+  }
 
   const sizeList = parseSizes(product.sizes);
   const hasSizes = sizeList.length > 0;
@@ -102,19 +120,29 @@ export function AddToCartSection({ product }: { product: ProductForCart }) {
       {hasSizes && <NailSizingGuide />}
       {hasSizes && (
         <div style={{ marginBottom: 20 }}>
-          <div
-            style={{
-              fontSize: '.74rem',
-              fontWeight: 800,
-              textTransform: 'uppercase',
-              letterSpacing: '.06em',
-              color: 'var(--muted)',
-              marginBottom: 10,
-            }}
-          >
-            Select size{' '}
-            {!selectedSize && (
-              <span style={{ color: 'var(--accent)', fontWeight: 700 }}>*</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div
+              style={{
+                fontSize: '.74rem',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '.06em',
+                color: 'var(--muted)',
+              }}
+            >
+              Select size{' '}
+              {!selectedSize && (
+                <span style={{ color: 'var(--accent)', fontWeight: 700 }}>*</span>
+              )}
+            </div>
+            {savedSize && sizeList.includes(savedSize) && selectedSize !== savedSize && (
+              <button
+                type="button"
+                onClick={() => setSelectedSize(savedSize)}
+                style={{ fontSize: '.74rem', fontWeight: 700, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                Use saved ({savedSize})
+              </button>
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -193,6 +221,15 @@ export function AddToCartSection({ product }: { product: ProductForCart }) {
                 Only {selectedStock} left in size {selectedSize}
               </p>
             )}
+          {selectedSize && selectedSize !== savedSize && (
+            <button
+              type="button"
+              onClick={() => saveProfile(selectedSize)}
+              style={{ marginTop: 8, fontSize: '.76rem', fontWeight: 600, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              {profileSaved ? '✓ Size saved!' : `💾 Save ${selectedSize} as my default size`}
+            </button>
+          )}
         </div>
       )}
 
