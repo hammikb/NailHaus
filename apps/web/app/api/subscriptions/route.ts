@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, getAuthUser, err } from '@/lib/route-helpers';
 
-// GET — list current user's subscriptions
+function getOrigin(req: NextRequest) {
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
+  const proto = req.headers.get('x-forwarded-proto') ?? 'https';
+
+  if (host) return `${proto}://${host}`;
+
+  return process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'http://localhost:3000';
+}
+
+// GET - list current user's subscriptions
 export async function GET(req: NextRequest) {
   const user = await getAuthUser(req);
   if (!user) return err('Unauthorized', 401);
@@ -16,7 +25,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data || []);
 }
 
-// POST — subscribe to a plan (creates Stripe checkout if stripe_price_id set, else simple record)
+// POST - subscribe to a plan (creates Stripe checkout if stripe_price_id set, else simple record)
 export async function POST(req: NextRequest) {
   const user = await getAuthUser(req);
   if (!user) return err('Unauthorized', 401);
@@ -34,7 +43,6 @@ export async function POST(req: NextRequest) {
 
   if (!plan) return err('Plan not found', 404);
 
-  // Check not already subscribed
   const { data: existing } = await supabaseAdmin
     .from('subscriptions')
     .select('id')
@@ -45,23 +53,22 @@ export async function POST(req: NextRequest) {
 
   if (existing) return err('Already subscribed to this plan', 409);
 
-  // If plan has a Stripe price ID, create a Stripe Checkout session
   if (plan.stripe_price_id) {
     const stripe = (await import('stripe')).default;
     const stripeClient = new stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' });
+    const origin = getOrigin(req);
 
     const session = await stripeClient.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
       metadata: { planId, userId: user.id },
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/orders?subscribed=1`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscribe`,
+      success_url: `${origin}/orders?subscribed=1`,
+      cancel_url: `${origin}/subscribe`,
     });
 
     return NextResponse.json({ url: session.url });
   }
 
-  // Otherwise create a simple subscription record (for testing without Stripe)
   const periodEnd = new Date();
   periodEnd.setMonth(periodEnd.getMonth() + 1);
 
@@ -75,7 +82,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(sub, { status: 201 });
 }
 
-// DELETE — cancel subscription
+// DELETE - cancel subscription
 export async function DELETE(req: NextRequest) {
   const user = await getAuthUser(req);
   if (!user) return err('Unauthorized', 401);
