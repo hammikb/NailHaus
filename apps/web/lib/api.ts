@@ -145,12 +145,16 @@ export const api = {
   getAdminStats() {
     return request<AdminStats>('/admin/stats');
   },
-  getAdminUsers(search = '', role = '') {
+  getAdminUsers(search = '', role = '', status = '') {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     if (role) params.set('role', role);
+    if (status) params.set('status', status);
     const suffix = params.toString() ? `?${params.toString()}` : '';
     return request<AdminUser[]>(`/admin/users${suffix}`);
+  },
+  updateAdminUser(id: string, data: { disabled?: boolean; role?: 'buyer' | 'vendor' | 'admin' }) {
+    return request<AdminUser>(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   },
   toggleUserDisabled(id: string, disabled: boolean) {
     return request<AdminUser>(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify({ disabled }) });

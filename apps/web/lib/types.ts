@@ -154,19 +154,33 @@ export interface Order {
 
 export interface AdminStats {
   totalVendors: number;
+  verifiedVendors: number;
+  unverifiedVendors: number;
   totalProducts: number;
   totalOrders: number;
   totalUsers: number;
+  totalNormalUsers: number;
+  totalAdmins: number;
+  disabledUsers: number;
   pendingVerifications: number;
   totalRevenue: number;
+  recentUsers: Array<{ id: string; name: string; role: string; createdAt: string }>;
+  recentOrders: Array<{ id: string; buyerName: string; total: number; status: string; createdAt: string }>;
 }
 
 export interface AdminUser {
   id: string;
   name: string;
+  email: string;
   role: string;
   disabled: boolean;
   created_at: string;
+  vendorId: string | null;
+  vendorName: string | null;
+  vendorVerified: boolean;
+  totalProducts: number;
+  totalSales: number;
+  hasVendorProfile: boolean;
 }
 
 export interface AdminProduct {

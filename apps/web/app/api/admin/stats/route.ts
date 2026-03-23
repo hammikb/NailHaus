@@ -7,28 +7,58 @@ export async function GET(req: NextRequest) {
 
   const [
     { count: totalVendors },
+    { count: verifiedVendors },
     { count: totalProducts },
     { count: totalOrders },
     { count: totalUsers },
+    { count: totalNormalUsers },
+    { count: totalAdmins },
+    { count: disabledUsers },
     { count: pendingVerifications },
     { data: revenueRows },
+    { data: recentUsersRows },
+    { data: recentOrdersRows },
   ] = await Promise.all([
     supabaseAdmin.from('vendors').select('*', { count: 'exact', head: true }),
+    supabaseAdmin.from('vendors').select('*', { count: 'exact', head: true }).eq('verified', true),
     supabaseAdmin.from('products').select('*', { count: 'exact', head: true }).eq('hidden', false),
     supabaseAdmin.from('orders').select('*', { count: 'exact', head: true }),
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }),
+    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'buyer'),
+    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'admin'),
+    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('disabled', true),
     supabaseAdmin.from('vendor_verification_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabaseAdmin.from('orders').select('total'),
+    supabaseAdmin.from('profiles').select('id, name, role, created_at').order('created_at', { ascending: false }).limit(6),
+    supabaseAdmin.from('orders').select('id, total, status, created_at, profiles!user_id(name)').order('created_at', { ascending: false }).limit(6),
   ]);
 
-  const totalRevenue = (revenueRows || []).reduce((s: number, o: { total: string }) => s + Number(o.total), 0);
+  const totalRevenue = (revenueRows || []).reduce((sum: number, order: { total: string | number }) => sum + Number(order.total), 0);
 
   return NextResponse.json({
     totalVendors: totalVendors || 0,
+    verifiedVendors: verifiedVendors || 0,
+    unverifiedVendors: Math.max((totalVendors || 0) - (verifiedVendors || 0), 0),
     totalProducts: totalProducts || 0,
     totalOrders: totalOrders || 0,
     totalUsers: totalUsers || 0,
+    totalNormalUsers: totalNormalUsers || 0,
+    totalAdmins: totalAdmins || 0,
+    disabledUsers: disabledUsers || 0,
     pendingVerifications: pendingVerifications || 0,
     totalRevenue,
+    recentUsers: (recentUsersRows || []).map((profile: Record<string, unknown>) => ({
+      id: String(profile.id),
+      name: String(profile.name || 'Unknown'),
+      role: String(profile.role || 'buyer'),
+      createdAt: String(profile.created_at || new Date().toISOString()),
+    })),
+    recentOrders: (recentOrdersRows || []).map((order: Record<string, unknown>) => ({
+      id: String(order.id),
+      buyerName: ((order.profiles as { name?: string } | null)?.name || 'Guest'),
+      total: Number(order.total || 0),
+      status: String(order.status || 'unknown'),
+      createdAt: String(order.created_at || new Date().toISOString()),
+    })),
   });
 }

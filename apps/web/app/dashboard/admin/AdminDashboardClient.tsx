@@ -1,12 +1,27 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
-import { AdminOrder, AdminProduct, AdminStats, AdminUser, AdminVendorRow, VerificationRequest } from '@/lib/types';
+import { AdminOrder, AdminProduct, AdminStats, AdminUser, AdminVendorRow, UserRole, VerificationRequest } from '@/lib/types';
 
-type Tab = 'overview' | 'verifications' | 'users' | 'products' | 'orders' | 'vendors';
+type Tab = 'overview' | 'verifications' | 'users' | 'vendors' | 'products' | 'orders';
+type StatusFilter = '' | 'active' | 'disabled';
+
+const TABS: Tab[] = ['overview', 'verifications', 'users', 'vendors', 'products', 'orders'];
+
+function roleLabel(role: string) {
+  return role === 'buyer' ? 'Normal User' : role === 'vendor' ? 'Vendor' : 'Admin';
+}
+
+function shortDate(value: string) {
+  return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function money(value: number) {
+  return `$${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
 
 export function AdminDashboardClient() {
   const { user, loading } = useAuth();
@@ -16,551 +31,192 @@ export function AdminDashboardClient() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [verifications, setVerifications] = useState<VerificationRequest[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [vendors, setVendors] = useState<AdminVendorRow[]>([]);
+  const [products, setProducts] = useState<AdminProduct[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [toast, setToast] = useState('');
+  const [busy, setBusy] = useState(false);
+
   const [verifFilter, setVerifFilter] = useState<'pending' | 'all'>('pending');
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState('');
-
-  // Products tab
-  const [adminProducts, setAdminProducts] = useState<AdminProduct[]>([]);
-  const [productSearch, setProductSearch] = useState('');
-  const [productHiddenFilter, setProductHiddenFilter] = useState('');
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-
-  // Orders tab
-  const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
-  const [orderStatusFilter, setOrderStatusFilter] = useState('');
-
-  // Vendors tab
-  const [adminVendors, setAdminVendors] = useState<AdminVendorRow[]>([]);
+  const [userStatusFilter, setUserStatusFilter] = useState<StatusFilter>('');
+  const [roleDrafts, setRoleDrafts] = useState<Record<string, UserRole>>({});
   const [vendorSearch, setVendorSearch] = useState('');
   const [vendorVerifiedFilter, setVendorVerifiedFilter] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [productHiddenFilter, setProductHiddenFilter] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('');
 
-  useEffect(() => {
-    if (!loading && (!user || user.role !== 'admin')) router.replace('/');
-  }, [user, loading, router]);
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(''), 3200);
+  }, []);
 
   const loadStats = useCallback(() => {
     api.getAdminStats().then(setStats).catch(() => {});
   }, []);
 
-  const loadVerifications = useCallback((filter: 'pending' | 'all') => {
-    api.getVerificationRequests(filter).then(setVerifications).catch(() => setVerifications([]));
-  }, []);
+  const loadUsers = useCallback(() => {
+    api.getAdminUsers(userSearch, userRoleFilter, userStatusFilter).then((rows) => {
+      setUsers(rows);
+      setRoleDrafts(Object.fromEntries(rows.map((row) => [row.id, row.role as UserRole])));
+    }).catch(() => setUsers([]));
+  }, [userSearch, userRoleFilter, userStatusFilter]);
 
-  const loadUsers = useCallback((search: string, role: string) => {
-    api.getAdminUsers(search, role).then(setUsers).catch(() => setUsers([]));
-  }, []);
-
-  useEffect(() => { loadStats(); }, [loadStats]);
+  const refreshCurrentTab = useCallback(() => {
+    if (tab === 'verifications') api.getVerificationRequests(verifFilter).then(setVerifications).catch(() => setVerifications([]));
+    if (tab === 'users') loadUsers();
+    if (tab === 'vendors') api.getAdminVendors(vendorSearch, vendorVerifiedFilter).then(setVendors).catch(() => setVendors([]));
+    if (tab === 'products') api.getAdminProducts(productSearch, productHiddenFilter).then(setProducts).catch(() => setProducts([]));
+    if (tab === 'orders') api.getAdminOrders(orderStatusFilter).then(setOrders).catch(() => setOrders([]));
+  }, [tab, verifFilter, loadUsers, vendorSearch, vendorVerifiedFilter, productSearch, productHiddenFilter, orderStatusFilter]);
 
   useEffect(() => {
-    if (tab === 'verifications') loadVerifications(verifFilter);
-    if (tab === 'users') loadUsers(userSearch, userRoleFilter);
-    if (tab === 'products') api.getAdminProducts(productSearch, productHiddenFilter).then(setAdminProducts).catch(() => setAdminProducts([]));
-    if (tab === 'orders') api.getAdminOrders(orderStatusFilter).then(setAdminOrders).catch(() => setAdminOrders([]));
-    if (tab === 'vendors') api.getAdminVendors(vendorSearch, vendorVerifiedFilter).then(setAdminVendors).catch(() => setAdminVendors([]));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, verifFilter, userSearch, userRoleFilter, productSearch, productHiddenFilter, orderStatusFilter, vendorSearch, vendorVerifiedFilter]);
+    if (!loading && (!user || user.role !== 'admin')) router.replace('/');
+  }, [loading, user, router]);
 
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(''), 3000);
-  }
+  useEffect(() => { loadStats(); }, [loadStats]);
+  useEffect(() => { refreshCurrentTab(); }, [refreshCurrentTab]);
 
-  async function handleVerification(id: string, status: 'approved' | 'rejected', note = '') {
+  const pendingRoleChanges = useMemo(
+    () => users.filter((account) => roleDrafts[account.id] && roleDrafts[account.id] !== account.role),
+    [users, roleDrafts]
+  );
+
+  async function updateUserRole(account: AdminUser) {
+    const role = roleDrafts[account.id];
+    if (!role || role === account.role) return;
     setBusy(true);
     try {
-      await api.reviewVerification(id, status, note);
-      showToast(status === 'approved' ? '✓ Vendor approved and verified!' : 'Request rejected.');
-      loadVerifications(verifFilter);
+      const updated = await api.updateAdminUser(account.id, { role });
+      setUsers((current) => current.map((row) => row.id === updated.id ? updated : row));
+      setRoleDrafts((current) => ({ ...current, [updated.id]: updated.role as UserRole }));
+      showToast(role === 'vendor' ? `${updated.name} promoted to vendor.` : role === 'buyer' ? `${updated.name} changed to normal user.` : `${updated.name} promoted to admin.`);
       loadStats();
-    } catch {
-      showToast('Action failed. Try again.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to update role.');
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleToggleUser(u: AdminUser) {
+  async function toggleUserDisabled(account: AdminUser) {
     setBusy(true);
     try {
-      await api.toggleUserDisabled(u.id, !u.disabled);
-      showToast(u.disabled ? `${u.name} re-enabled.` : `${u.name} disabled.`);
-      loadUsers(userSearch, userRoleFilter);
-    } catch {
-      showToast('Failed to update user.');
+      const updated = await api.updateAdminUser(account.id, { disabled: !account.disabled });
+      setUsers((current) => current.map((row) => row.id === updated.id ? updated : row));
+      showToast(updated.disabled ? `${updated.name} disabled.` : `${updated.name} re-enabled.`);
+      loadStats();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to update user.');
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleToggleProductHidden(p: AdminProduct) {
-    setBusy(true);
-    try {
-      await api.toggleProductHidden(p.id, !p.hidden);
-      showToast(p.hidden ? `"${p.name}" is now visible.` : `"${p.name}" hidden from shop.`);
-      setAdminProducts(ps => ps.map(x => x.id === p.id ? { ...x, hidden: !x.hidden } : x));
-    } catch {
-      showToast('Failed to update product.');
-    } finally { setBusy(false); }
-  }
-
-  async function handleDeleteProduct(id: string) {
-    setBusy(true);
-    try {
-      await api.adminDeleteProduct(id);
-      showToast('Product deleted.');
-      setAdminProducts(ps => ps.filter(x => x.id !== id));
-      setDeleteConfirm(null);
-    } catch {
-      showToast('Failed to delete product.');
-    } finally { setBusy(false); }
-  }
-
-  async function handleToggleVendorVerified(v: AdminVendorRow) {
-    setBusy(true);
-    try {
-      await api.toggleVendorVerified(v.id, !v.verified);
-      showToast(v.verified ? `${v.name} verification removed.` : `${v.name} marked as verified.`);
-      setAdminVendors(vs => vs.map(x => x.id === v.id ? { ...x, verified: !x.verified } : x));
-    } catch {
-      showToast('Failed to update vendor.');
-    } finally { setBusy(false); }
-  }
-
-  if (loading || !user) return null;
-  if (user.role !== 'admin') return null;
+  if (loading || !user || user.role !== 'admin') return null;
 
   return (
     <main className="page-shell">
       <div className="container">
-        {/* Toast */}
-        {toast && (
-          <div className="alert alert-success" style={{ marginBottom: 16 }}>{toast}</div>
-        )}
+        {toast ? <div className="alert alert-success" style={{ marginBottom: 16 }}>{toast}</div> : null}
 
-        <div style={{ marginBottom: 24 }}>
-          <p className="eyebrow">Admin</p>
-          <h1 className="section-title">Platform <em>dashboard</em></h1>
+        <div className="section-head" style={{ marginBottom: 18 }}>
+          <div>
+            <p className="eyebrow">Admin</p>
+            <h1 className="section-title">Platform <em>dashboard</em></h1>
+          </div>
+          <span className="chip">{user.name} · {user.email}</span>
         </div>
 
-        {/* Tab nav */}
         <div className="tab-nav">
-          {(['overview', 'verifications', 'users', 'vendors', 'products', 'orders'] as Tab[]).map(t => (
-            <button key={t} className={`tab-btn${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-              {t === 'overview' ? '📊 Overview' :
-               t === 'verifications' ? `✓ Verifications${stats?.pendingVerifications ? ` (${stats.pendingVerifications})` : ''}` :
-               t === 'users' ? '👥 Users' :
-               t === 'vendors' ? '🎨 Vendors' :
-               t === 'products' ? '💅 Products' :
-               '📦 Orders'}
-            </button>
-          ))}
+          {TABS.map((item) => <button key={item} className={`tab-btn${tab === item ? ' active' : ''}`} onClick={() => setTab(item)}>{item === 'verifications' && stats?.pendingVerifications ? `Verifications (${stats.pendingVerifications})` : item.charAt(0).toUpperCase() + item.slice(1)}</button>)}
         </div>
 
-        {/* ─── Overview ─── */}
-        {tab === 'overview' && (
+        {tab === 'overview' && stats && (
           <>
-            {stats ? (
-              <div className="dashboard-grid">
-                <div className="panel kpi kpi-accent">
-                  <span className="kpi-icon">💰</span>
-                  <strong>${stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</strong>
-                  <span className="kpi-label">Total revenue</span>
+            <div className="grid" style={{ gridTemplateColumns: '1.2fr .9fr', gap: 18, marginBottom: 18 }}>
+              <div className="panel" style={{ padding: 24 }}>
+                <div style={{ fontWeight: 800, fontSize: '1.05rem', marginBottom: 8 }}>Admin profile</div>
+                <p className="muted" style={{ marginTop: 0 }}>This dashboard now supports real user role management, vendor promotion, and richer marketplace reporting.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+                  <div className="panel" style={{ padding: 16, boxShadow: 'none' }}><div className="muted" style={{ fontSize: '.74rem', fontWeight: 800 }}>Role</div><div style={{ fontWeight: 800 }}>Admin</div></div>
+                  <div className="panel" style={{ padding: 16, boxShadow: 'none' }}><div className="muted" style={{ fontSize: '.74rem', fontWeight: 800 }}>Pending vendor reviews</div><div style={{ fontWeight: 800 }}>{stats.pendingVerifications}</div></div>
+                  <div className="panel" style={{ padding: 16, boxShadow: 'none' }}><div className="muted" style={{ fontSize: '.74rem', fontWeight: 800 }}>Disabled accounts</div><div style={{ fontWeight: 800 }}>{stats.disabledUsers}</div></div>
                 </div>
-                <div className="panel kpi">
-                  <span className="kpi-icon">📦</span>
-                  <strong>{stats.totalOrders.toLocaleString()}</strong>
-                  <span className="kpi-label">Total orders</span>
-                </div>
-                <div className="panel kpi">
-                  <span className="kpi-icon">🛍️</span>
-                  <strong>{stats.totalProducts.toLocaleString()}</strong>
-                  <span className="kpi-label">Active listings</span>
-                </div>
-                <div className="panel kpi">
-                  <span className="kpi-icon">🎨</span>
-                  <strong>{stats.totalVendors.toLocaleString()}</strong>
-                  <span className="kpi-label">Vendors</span>
-                </div>
-                <div className="panel kpi">
-                  <span className="kpi-icon">👤</span>
-                  <strong>{stats.totalUsers.toLocaleString()}</strong>
-                  <span className="kpi-label">Users</span>
-                </div>
-                {stats.pendingVerifications > 0 && (
-                  <div className="panel kpi" style={{ border: '1.5px solid #fcd34d', background: 'var(--warning-bg)' }}>
-                    <span className="kpi-icon">⏳</span>
-                    <strong>{stats.pendingVerifications}</strong>
-                    <span className="kpi-label" style={{ color: 'var(--warning)' }}>Pending verif.</span>
-                  </div>
-                )}
               </div>
-            ) : (
-              <div className="dashboard-grid">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="panel kpi">
-                    <div className="shimmer" style={{ height: 36, marginBottom: 8 }} />
-                    <div className="shimmer" style={{ height: 12, width: '60%' }} />
-                  </div>
-                ))}
+              <div className="panel" style={{ padding: 24 }}>
+                <div style={{ fontWeight: 800, fontSize: '1.05rem', marginBottom: 10 }}>Quick actions</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button className="pill btn-sm btn-ghost" onClick={() => setTab('users')}>Manage users</button>
+                  <button className="pill btn-sm btn-ghost" onClick={() => setTab('vendors')}>Manage vendors</button>
+                  <button className="pill btn-sm btn-ghost" onClick={() => setTab('verifications')}>Review verifications</button>
+                </div>
               </div>
-            )}
+            </div>
 
-            {stats?.pendingVerifications ? (
-              <div className="alert alert-warn" style={{ marginTop: 8 }}>
-                ⚠️ <strong>{stats.pendingVerifications}</strong> vendor verification request{stats.pendingVerifications > 1 ? 's' : ''} awaiting review.
-                <button className="pill btn-sm" style={{ marginLeft: 16, background: 'white' }} onClick={() => setTab('verifications')}>Review now →</button>
+            <div className="dashboard-grid" style={{ marginBottom: 18 }}>
+              <div className="panel kpi kpi-accent"><strong>{money(stats.totalRevenue)}</strong><span className="kpi-label">Revenue</span></div>
+              <div className="panel kpi"><strong>{stats.totalOrders}</strong><span className="kpi-label">Orders</span></div>
+              <div className="panel kpi"><strong>{stats.totalProducts}</strong><span className="kpi-label">Products</span></div>
+              <div className="panel kpi"><strong>{stats.totalVendors}</strong><span className="kpi-label">Vendors</span></div>
+              <div className="panel kpi"><strong>{stats.totalNormalUsers}</strong><span className="kpi-label">Normal users</span></div>
+              <div className="panel kpi"><strong>{stats.totalAdmins}</strong><span className="kpi-label">Admins</span></div>
+            </div>
+
+            <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+              <div className="panel" style={{ padding: 22 }}>
+                <div className="between" style={{ marginBottom: 12 }}><strong>Recent signups</strong><button className="pill btn-sm btn-ghost" onClick={() => setTab('users')}>Open users</button></div>
+                {stats.recentUsers.map((account) => <div key={account.id} className="list-item"><div className="between"><strong>{account.name}</strong><span className="chip">{roleLabel(account.role)}</span></div><div className="muted" style={{ fontSize: '.8rem', marginTop: 4 }}>{shortDate(account.createdAt)}</div></div>)}
               </div>
-            ) : null}
+              <div className="panel" style={{ padding: 22 }}>
+                <div className="between" style={{ marginBottom: 12 }}><strong>Recent orders</strong><button className="pill btn-sm btn-ghost" onClick={() => setTab('orders')}>Open orders</button></div>
+                {stats.recentOrders.map((order) => <div key={order.id} className="list-item"><div className="between"><strong>{order.buyerName}</strong><span style={{ fontWeight: 800 }}>{money(order.total)}</span></div><div className="muted" style={{ fontSize: '.8rem', marginTop: 4 }}>{order.status} · {shortDate(order.createdAt)}</div></div>)}
+              </div>
+            </div>
           </>
         )}
 
-        {/* ─── Verifications ─── */}
         {tab === 'verifications' && (
           <>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-              {(['pending', 'all'] as const).map(f => (
-                <button key={f} className={`filter-pill${verifFilter === f ? ' active' : ''}`} onClick={() => setVerifFilter(f)}>
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </button>
-              ))}
-            </div>
-
-            {verifications.length === 0 ? (
-              <div className="panel empty-state">
-                <span className="empty-icon">✓</span>
-                <p>{verifFilter === 'pending' ? 'No pending verification requests.' : 'No verification requests found.'}</p>
-              </div>
-            ) : (
-              <div className="list">
-                {verifications.map(req => (
-                  <div key={req.id} className="panel list-item" style={{ padding: 24 }}>
-                    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                      <div style={{
-                        width: 52, height: 52, borderRadius: 14, display: 'grid', placeItems: 'center',
-                        fontSize: '1.6rem', background: req.vendors?.bg_color || '#fde8e8', flexShrink: 0,
-                      }}>
-                        {req.vendors?.emoji || '💅'}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 200 }}>
-                        <div style={{ fontWeight: 800, fontSize: '1rem' }}>{req.vendors?.name || 'Unknown vendor'}</div>
-                        <div className="muted" style={{ fontSize: '.82rem', marginBottom: 8 }}>
-                          From: {req.profiles?.name || 'Unknown'} · {new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </div>
-                        {req.message && <p className="subtle" style={{ margin: '0 0 10px', fontSize: '.88rem', lineHeight: 1.6 }}>{req.message}</p>}
-                        {req.links && req.links.length > 0 && (
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {req.links.map((link, i) => (
-                              <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="social-link" style={{ fontSize: '.78rem', padding: '4px 12px' }}>
-                                🔗 Link {i + 1}
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                        {req.admin_note && (
-                          <div className="muted" style={{ fontSize: '.8rem', marginTop: 8, fontStyle: 'italic' }}>Admin note: {req.admin_note}</div>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                        {req.status === 'pending' ? (
-                          <>
-                            <button
-                              className="pill btn-sm"
-                              style={{ background: 'var(--success-bg)', color: 'var(--success)', borderColor: '#86efac' }}
-                              disabled={busy}
-                              onClick={() => handleVerification(req.id, 'approved')}
-                            >
-                              ✓ Approve
-                            </button>
-                            <button
-                              className="pill btn-danger btn-sm"
-                              disabled={busy}
-                              onClick={() => handleVerification(req.id, 'rejected')}
-                            >
-                              ✕ Reject
-                            </button>
-                          </>
-                        ) : (
-                          <span className={`chip ${req.status === 'approved' ? 'chip-success' : 'chip-danger'}`}>
-                            {req.status === 'approved' ? '✓ Approved' : '✕ Rejected'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}><button className={`filter-pill${verifFilter === 'pending' ? ' active' : ''}`} onClick={() => setVerifFilter('pending')}>Pending</button><button className={`filter-pill${verifFilter === 'all' ? ' active' : ''}`} onClick={() => setVerifFilter('all')}>All</button></div>
+            {!verifications.length ? <div className="panel empty-state"><p>No verification requests found.</p></div> : verifications.map((request) => <div key={request.id} className="panel list-item" style={{ padding: 24 }}><div className="between"><div><strong>{request.vendors?.name || 'Unknown vendor'}</strong><div className="muted" style={{ fontSize: '.82rem', marginTop: 4 }}>Submitted by {request.profiles?.name || 'Unknown'} · {shortDate(request.created_at)}</div></div>{request.status === 'pending' ? <div style={{ display: 'flex', gap: 8 }}><button className="pill btn-sm" style={{ background: 'var(--success-bg)', color: 'var(--success)', borderColor: '#86efac' }} disabled={busy} onClick={async () => { setBusy(true); try { await api.reviewVerification(request.id, 'approved'); showToast('Vendor approved.'); refreshCurrentTab(); loadStats(); } finally { setBusy(false); } }}>Approve</button><button className="pill btn-sm btn-danger" disabled={busy} onClick={async () => { setBusy(true); try { await api.reviewVerification(request.id, 'rejected'); showToast('Request rejected.'); refreshCurrentTab(); loadStats(); } finally { setBusy(false); } }}>Reject</button></div> : <span className="chip">{request.status}</span>}</div>{request.message ? <p className="subtle" style={{ marginBottom: 0 }}>{request.message}</p> : null}</div>)}
           </>
         )}
 
-        {/* ─── Users ─── */}
         {tab === 'users' && (
           <>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-              <div className="filter-search-wrap" style={{ flex: 1, minWidth: 200 }}>
-                <span className="filter-search-icon">🔍</span>
-                <input
-                  className="filter-search"
-                  placeholder="Search users..."
-                  value={userSearch}
-                  onChange={e => setUserSearch(e.target.value)}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {['', 'buyer', 'vendor', 'admin'].map(r => (
-                  <button key={r} className={`filter-pill${userRoleFilter === r ? ' active' : ''}`} onClick={() => setUserRoleFilter(r)}>
-                    {r || 'All'}
-                  </button>
-                ))}
-              </div>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 16 }}>
+              <div className="panel kpi"><strong>{stats?.totalNormalUsers ?? 0}</strong><span className="kpi-label">Normal users</span></div>
+              <div className="panel kpi"><strong>{stats?.totalVendors ?? 0}</strong><span className="kpi-label">Vendors</span></div>
+              <div className="panel kpi"><strong>{stats?.totalAdmins ?? 0}</strong><span className="kpi-label">Admins</span></div>
+              <div className="panel kpi"><strong>{stats?.disabledUsers ?? 0}</strong><span className="kpi-label">Disabled</span></div>
             </div>
 
-            {users.length === 0 ? (
-              <div className="panel empty-state">
-                <span className="empty-icon">👤</span>
-                <p>No users found.</p>
-              </div>
-            ) : (
-              <div className="panel" style={{ overflow: 'hidden' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Role</th>
-                      <th>Joined</th>
-                      <th>Status</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map(u => (
-                      <tr key={u.id}>
-                        <td style={{ fontWeight: 600 }}>{u.name}</td>
-                        <td>
-                          <span className="chip" style={{
-                            background: u.role === 'admin' ? 'var(--accent-light)' : u.role === 'vendor' ? 'var(--info-bg)' : 'var(--surface-2)',
-                            color: u.role === 'admin' ? 'var(--accent)' : u.role === 'vendor' ? 'var(--info)' : 'var(--muted)',
-                          }}>
-                            {u.role}
-                          </span>
-                        </td>
-                        <td className="muted" style={{ fontSize: '.82rem' }}>
-                          {new Date(u.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </td>
-                        <td>
-                          {u.disabled ? (
-                            <span className="chip" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>Disabled</span>
-                          ) : (
-                            <span className="chip" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>Active</span>
-                          )}
-                        </td>
-                        <td>
-                          {u.id !== user.id && (
-                            <button
-                              className={`pill btn-sm ${u.disabled ? '' : 'btn-danger'}`}
-                              style={u.disabled ? { background: 'var(--success-bg)', color: 'var(--success)', borderColor: '#86efac' } : {}}
-                              disabled={busy}
-                              onClick={() => handleToggleUser(u)}
-                            >
-                              {u.disabled ? 'Re-enable' : 'Disable'}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-        {/* ─── Vendors ─── */}
-        {tab === 'vendors' && (
-          <>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-              <div className="filter-search-wrap" style={{ flex: 1, minWidth: 200 }}>
-                <span className="filter-search-icon">🔍</span>
-                <input className="filter-search" placeholder="Search vendors..." value={vendorSearch} onChange={e => setVendorSearch(e.target.value)} />
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {[['', 'All'], ['true', 'Verified'], ['false', 'Unverified']].map(([val, label]) => (
-                  <button key={val} className={`filter-pill${vendorVerifiedFilter === val ? ' active' : ''}`} onClick={() => setVendorVerifiedFilter(val)}>{label}</button>
-                ))}
-              </div>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div className="filter-search-wrap" style={{ flex: 1, minWidth: 240 }}><span className="filter-search-icon">?</span><input className="filter-search" placeholder="Search by name or email..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} /></div>
+              {[['', 'All'], ['buyer', 'Normal'], ['vendor', 'Vendors'], ['admin', 'Admins']].map(([value, label]) => <button key={value} className={`filter-pill${userRoleFilter === value ? ' active' : ''}`} onClick={() => setUserRoleFilter(value)}>{label}</button>)}
+              {[['', 'Any'], ['active', 'Active'], ['disabled', 'Disabled']].map(([value, label]) => <button key={value} className={`filter-pill${userStatusFilter === value ? ' active' : ''}`} onClick={() => setUserStatusFilter(value as StatusFilter)}>{label}</button>)}
             </div>
-            {adminVendors.length === 0 ? (
-              <div className="panel empty-state"><span className="empty-icon">🎨</span><p>No vendors found.</p></div>
-            ) : (
-              <div className="panel" style={{ overflow: 'hidden' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Vendor</th>
-                      <th>Products</th>
-                      <th>Sales</th>
-                      <th>Rating</th>
-                      <th>Status</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adminVendors.map(v => (
-                      <tr key={v.id}>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: 8, background: v.bgColor, display: 'grid', placeItems: 'center', fontSize: '1rem', flexShrink: 0 }}>{v.emoji}</div>
-                            <span style={{ fontWeight: 700 }}>{v.name}</span>
-                          </div>
-                        </td>
-                        <td>{v.totalProducts ?? 0}</td>
-                        <td>{v.totalSales ?? 0}</td>
-                        <td>{v.rating ? Number(v.rating).toFixed(1) : '—'}</td>
-                        <td>
-                          {v.verified
-                            ? <span className="chip" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>✓ Verified</span>
-                            : <span className="chip" style={{ background: 'var(--surface-2)', color: 'var(--muted)' }}>Unverified</span>}
-                        </td>
-                        <td>
-                          <button
-                            className={`pill btn-sm ${v.verified ? 'btn-ghost' : ''}`}
-                            style={!v.verified ? { background: 'var(--success-bg)', color: 'var(--success)', borderColor: '#86efac' } : {}}
-                            disabled={busy}
-                            onClick={() => handleToggleVendorVerified(v)}
-                          >
-                            {v.verified ? 'Remove verified' : '✓ Verify'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
 
-        {/* ─── Products ─── */}
-        {tab === 'products' && (
-          <>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-              <div className="filter-search-wrap" style={{ flex: 1, minWidth: 200 }}>
-                <span className="filter-search-icon">🔍</span>
-                <input className="filter-search" placeholder="Search products..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {[['', 'All'], ['false', 'Visible'], ['true', 'Hidden']].map(([val, label]) => (
-                  <button key={val} className={`filter-pill${productHiddenFilter === val ? ' active' : ''}`} onClick={() => setProductHiddenFilter(val)}>{label}</button>
-                ))}
-              </div>
-            </div>
-            {adminProducts.length === 0 ? (
-              <div className="panel empty-state"><span className="empty-icon">💅</span><p>No products found.</p></div>
-            ) : (
+            {pendingRoleChanges.length ? <div className="alert alert-warn" style={{ marginBottom: 16 }}>{pendingRoleChanges.length} unsaved role change{pendingRoleChanges.length !== 1 ? 's' : ''} in this view.</div> : null}
+            {!users.length ? <div className="panel empty-state"><p>No users found.</p></div> : (
               <div className="panel" style={{ overflow: 'hidden' }}>
                 <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>Vendor</th>
-                      <th>Price</th>
-                      <th>Reviews</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
+                  <thead><tr><th>User</th><th>Category</th><th>Vendor profile</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody>
-                    {adminProducts.map(p => (
-                      <tr key={p.id} style={{ opacity: p.hidden ? 0.55 : 1 }}>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: 8, background: p.bgColor, display: 'grid', placeItems: 'center', fontSize: '1rem', flexShrink: 0 }}>{p.emoji}</div>
-                            <span style={{ fontWeight: 700 }}>{p.name}</span>
-                          </div>
-                        </td>
-                        <td className="muted" style={{ fontSize: '.82rem' }}>{p.vendorName ?? '—'}</td>
-                        <td>${Number(p.price).toFixed(2)}</td>
-                        <td>{p.reviewCount ?? 0}</td>
-                        <td>
-                          {p.hidden
-                            ? <span className="chip" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>Hidden</span>
-                            : <span className="chip" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>Visible</span>}
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button
-                              className="pill btn-sm btn-ghost"
-                              disabled={busy}
-                              onClick={() => handleToggleProductHidden(p)}
-                            >
-                              {p.hidden ? '👁 Show' : '🚫 Hide'}
-                            </button>
-                            {deleteConfirm === p.id ? (
-                              <>
-                                <button className="pill btn-sm btn-danger" disabled={busy} onClick={() => handleDeleteProduct(p.id)}>Confirm delete</button>
-                                <button className="pill btn-sm btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancel</button>
-                              </>
-                            ) : (
-                              <button className="pill btn-sm btn-danger" disabled={busy} onClick={() => setDeleteConfirm(p.id)}>Delete</button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ─── Orders ─── */}
-        {tab === 'orders' && (
-          <>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-              {[['', 'All'], ['confirmed', 'Confirmed'], ['shipped', 'Shipped'], ['delivered', 'Delivered'], ['cancelled', 'Cancelled']].map(([val, label]) => (
-                <button key={val} className={`filter-pill${orderStatusFilter === val ? ' active' : ''}`} onClick={() => setOrderStatusFilter(val)}>{label}</button>
-              ))}
-            </div>
-            {adminOrders.length === 0 ? (
-              <div className="panel empty-state"><span className="empty-icon">📦</span><p>No orders found.</p></div>
-            ) : (
-              <div className="panel" style={{ overflow: 'hidden' }}>
-                <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="chip">{adminOrders.length} orders</span>
-                  <strong style={{ color: 'var(--accent)' }}>
-                    ${adminOrders.reduce((s, o) => s + Number(o.total), 0).toFixed(2)} total
-                  </strong>
-                </div>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Order ID</th>
-                      <th>Buyer</th>
-                      <th>Total</th>
-                      <th>Status</th>
-                      <th>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adminOrders.map(o => {
-                      const statusColors: Record<string, { bg: string; color: string }> = {
-                        confirmed: { bg: 'var(--info-bg)', color: 'var(--info)' },
-                        shipped: { bg: 'var(--warning-bg)', color: 'var(--warning)' },
-                        delivered: { bg: 'var(--success-bg)', color: 'var(--success)' },
-                        cancelled: { bg: 'var(--danger-bg)', color: 'var(--danger)' },
-                      };
-                      const sc = statusColors[o.status] ?? { bg: 'var(--surface-2)', color: 'var(--muted)' };
+                    {users.map((account) => {
+                      const isSelf = account.id === user.id;
+                      const draftRole = roleDrafts[account.id] || (account.role as UserRole);
                       return (
-                        <tr key={o.id}>
-                          <td style={{ fontFamily: 'monospace', fontSize: '.85rem', fontWeight: 700 }}>#{o.id.slice(0, 8).toUpperCase()}</td>
-                          <td style={{ fontWeight: 600 }}>{o.buyerName}</td>
-                          <td style={{ fontWeight: 800 }}>${Number(o.total).toFixed(2)}</td>
-                          <td><span className="chip" style={{ background: sc.bg, color: sc.color, borderColor: 'transparent', textTransform: 'capitalize' }}>{o.status}</span></td>
-                          <td className="muted" style={{ fontSize: '.82rem' }}>{new Date(o.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                        <tr key={account.id}>
+                          <td><div style={{ fontWeight: 700 }}>{account.name}</div><div className="muted" style={{ fontSize: '.8rem' }}>{account.email || 'No email available'}</div></td>
+                          <td><div style={{ display: 'grid', gap: 8 }}><span className="chip">{roleLabel(account.role)}</span><select className="field-input" style={{ minWidth: 150, padding: '8px 10px' }} value={draftRole} disabled={busy || isSelf} onChange={(e) => setRoleDrafts((current) => ({ ...current, [account.id]: e.target.value as UserRole }))}><option value="buyer">Normal User</option><option value="vendor">Vendor</option><option value="admin">Admin</option></select></div></td>
+                          <td>{account.hasVendorProfile ? <div><div style={{ fontWeight: 700 }}>{account.vendorName || 'Vendor profile'}</div><div className="muted" style={{ fontSize: '.8rem' }}>{account.vendorVerified ? 'Verified' : 'Unverified'} · {account.totalProducts} products · {account.totalSales} sales</div></div> : <span className="muted" style={{ fontSize: '.85rem' }}>No vendor profile</span>}</td>
+                          <td className="muted" style={{ fontSize: '.82rem' }}>{shortDate(account.created_at)}</td>
+                          <td><span className="chip" style={{ background: account.disabled ? 'var(--danger-bg)' : 'var(--success-bg)', color: account.disabled ? 'var(--danger)' : 'var(--success)' }}>{account.disabled ? 'Disabled' : 'Active'}</span></td>
+                          <td><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button className={`pill btn-sm ${account.disabled ? '' : 'btn-danger'}`} style={account.disabled ? { background: 'var(--success-bg)', color: 'var(--success)', borderColor: '#86efac' } : {}} disabled={busy || isSelf} onClick={() => toggleUserDisabled(account)}>{account.disabled ? 'Re-enable' : 'Disable'}</button><button className="pill btn-sm btn-ghost" disabled={busy || isSelf || draftRole === account.role} onClick={() => updateUserRole(account)}>Save role</button></div></td>
                         </tr>
                       );
                     })}
@@ -568,6 +224,33 @@ export function AdminDashboardClient() {
                 </table>
               </div>
             )}
+          </>
+        )}
+
+        {tab === 'vendors' && (
+          <>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div className="filter-search-wrap" style={{ flex: 1, minWidth: 240 }}><span className="filter-search-icon">?</span><input className="filter-search" placeholder="Search vendors..." value={vendorSearch} onChange={(e) => setVendorSearch(e.target.value)} /></div>
+              {[['', 'All'], ['true', 'Verified'], ['false', 'Unverified']].map(([value, label]) => <button key={value} className={`filter-pill${vendorVerifiedFilter === value ? ' active' : ''}`} onClick={() => setVendorVerifiedFilter(value)}>{label}</button>)}
+            </div>
+            {!vendors.length ? <div className="panel empty-state"><p>No vendors found.</p></div> : <div className="panel" style={{ overflow: 'hidden' }}><table className="data-table"><thead><tr><th>Vendor</th><th>Products</th><th>Sales</th><th>Rating</th><th>Status</th><th>Action</th></tr></thead><tbody>{vendors.map((vendor) => <tr key={vendor.id}><td><strong>{vendor.name}</strong></td><td>{vendor.totalProducts ?? 0}</td><td>{vendor.totalSales ?? 0}</td><td>{vendor.rating ? Number(vendor.rating).toFixed(1) : '-'}</td><td><span className="chip">{vendor.verified ? 'Verified' : 'Unverified'}</span></td><td><button className="pill btn-sm btn-ghost" disabled={busy} onClick={async () => { setBusy(true); try { await api.toggleVendorVerified(vendor.id, !vendor.verified); showToast(vendor.verified ? 'Vendor verification removed.' : 'Vendor verified.'); refreshCurrentTab(); loadStats(); } finally { setBusy(false); } }}>{vendor.verified ? 'Remove verified' : 'Verify vendor'}</button></td></tr>)}</tbody></table></div>}
+          </>
+        )}
+
+        {tab === 'products' && (
+          <>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div className="filter-search-wrap" style={{ flex: 1, minWidth: 240 }}><span className="filter-search-icon">?</span><input className="filter-search" placeholder="Search products..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} /></div>
+              {[['', 'All'], ['false', 'Visible'], ['true', 'Hidden']].map(([value, label]) => <button key={value} className={`filter-pill${productHiddenFilter === value ? ' active' : ''}`} onClick={() => setProductHiddenFilter(value)}>{label}</button>)}
+            </div>
+            {!products.length ? <div className="panel empty-state"><p>No products found.</p></div> : <div className="panel" style={{ overflow: 'hidden' }}><table className="data-table"><thead><tr><th>Product</th><th>Vendor</th><th>Price</th><th>Reviews</th><th>Status</th><th>Action</th></tr></thead><tbody>{products.map((product) => <tr key={product.id} style={{ opacity: product.hidden ? 0.55 : 1 }}><td><strong>{product.name}</strong></td><td>{product.vendorName ?? '-'}</td><td>${Number(product.price).toFixed(2)}</td><td>{product.reviewCount ?? 0}</td><td><span className="chip">{product.hidden ? 'Hidden' : 'Visible'}</span></td><td><button className="pill btn-sm btn-ghost" disabled={busy} onClick={async () => { setBusy(true); try { await api.toggleProductHidden(product.id, !product.hidden); showToast(product.hidden ? 'Product is now visible.' : 'Product hidden from shop.'); refreshCurrentTab(); loadStats(); } finally { setBusy(false); } }}>{product.hidden ? 'Show' : 'Hide'}</button></td></tr>)}</tbody></table></div>}
+          </>
+        )}
+
+        {tab === 'orders' && (
+          <>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>{[['', 'All'], ['confirmed', 'Confirmed'], ['shipped', 'Shipped'], ['delivered', 'Delivered'], ['cancelled', 'Cancelled']].map(([value, label]) => <button key={value} className={`filter-pill${orderStatusFilter === value ? ' active' : ''}`} onClick={() => setOrderStatusFilter(value)}>{label}</button>)}</div>
+            {!orders.length ? <div className="panel empty-state"><p>No orders found.</p></div> : <div className="panel" style={{ overflow: 'hidden' }}><div className="between" style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)' }}><span className="chip">{orders.length} orders</span><strong style={{ color: 'var(--accent)' }}>${orders.reduce((sum, order) => sum + Number(order.total), 0).toFixed(2)} total</strong></div><table className="data-table"><thead><tr><th>Order ID</th><th>Buyer</th><th>Total</th><th>Status</th><th>Date</th></tr></thead><tbody>{orders.map((order) => <tr key={order.id}><td style={{ fontFamily: 'monospace', fontWeight: 700 }}>#{order.id.slice(0, 8).toUpperCase()}</td><td>{order.buyerName}</td><td>${Number(order.total).toFixed(2)}</td><td><span className="chip">{order.status}</span></td><td>{shortDate(order.createdAt)}</td></tr>)}</tbody></table></div>}
           </>
         )}
       </div>
