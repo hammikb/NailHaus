@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import { ImportResult, PayoutSummary, Product, ShippingRate, VendorDashboard } from '@/lib/types';
 
-type Tab = 'overview' | 'products' | 'analytics' | 'import' | 'payouts' | 'insights' | 'subscriptions' | 'profile';
+type Tab = 'overview' | 'products' | 'analytics' | 'import' | 'payouts' | 'insights' | 'subscriptions' | 'stripe' | 'profile';
 type AnalyticsRow = { productId: string; name: string; emoji: string; bgColor: string; imageUrl: string | null; orders: number; units: number; revenue: number };
 type ImportMode = 'json' | 'csv' | 'etsy';
 
@@ -712,7 +712,7 @@ export function VendorDashboardClient() {
 
       {/* Tab nav */}
       <div className="tab-nav">
-        {(['overview', 'products', 'analytics', 'import', 'payouts', 'insights', 'subscriptions', 'profile'] as Tab[]).map(t => (
+        {(['overview', 'products', 'analytics', 'import', 'payouts', 'insights', 'subscriptions', 'stripe', 'profile'] as Tab[]).map(t => (
           <button key={t} className={`tab-btn${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
             {t === 'overview' ? '📊 Overview' :
              t === 'products' ? `💅 Products (${products.length})` :
@@ -720,7 +720,8 @@ export function VendorDashboardClient() {
              t === 'import' ? '📥 Import' :
              t === 'payouts' ? '💰 Payouts' :
              t === 'insights' ? '💡 Insights' :
-             t === 'subscriptions' ? '📦 Subscriptions' : '✏️ Profile'}
+             t === 'subscriptions' ? '📦 Subscriptions' :
+             t === 'stripe' ? '💳 Stripe Connect' : '✏️ Profile'}
           </button>
         ))}
       </div>
@@ -1515,6 +1516,9 @@ export function VendorDashboardClient() {
       {/* ═══ SUBSCRIPTIONS TAB ═════════════════════════ */}
       {tab === 'subscriptions' && <SubscriptionPlansTab />}
 
+      {/* ═══ STRIPE CONNECT TAB ════════════════════════ */}
+      {tab === 'stripe' && <StripeConnectTab />}
+
       {/* ═══ PROFILE TAB ═══════════════════════════════ */}
       {tab === 'profile' && (
         <div className="fade-in" style={{ maxWidth: 680 }}>
@@ -1804,6 +1808,147 @@ function InsightsTab() {
 
       <h3 style={{ fontWeight: 800, fontSize: '1rem', margin: '28px 0 12px' }}>🔔 Most Waitlisted</h3>
       <InsightList rows={waitlistInsights} countKey="waitlistCount" label="waiting" />
+    </div>
+  );
+}
+
+/* ─── Stripe Connect Tab ────────────────────────────── */
+function StripeConnectTab() {
+  const [status, setStatus] = useState<{ connected: boolean; onboardingComplete: boolean; accountId: string | null } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  function authFetch(path: string, opts?: RequestInit) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('nh_tok') : null;
+    return fetch(path, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(opts?.headers || {}) },
+      credentials: 'include',
+    });
+  }
+
+  useEffect(() => {
+    // Check if returning from Stripe onboarding
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('stripe') === 'connected') {
+      setMsg('✓ Stripe account connected! Your payouts are now set up.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    authFetch('/api/vendors/me/stripe-connect')
+      .then(r => r.json())
+      .then(setStatus)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleConnect() {
+    setConnecting(true);
+    setMsg('');
+    try {
+      const res = await authFetch('/api/vendors/me/stripe-connect', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { setMsg(data.error || 'Could not start Stripe onboarding.'); return; }
+      window.location.href = data.url;
+    } catch {
+      setMsg('Something went wrong. Please try again.');
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  if (loading) return (
+    <div className="fade-in">
+      {[...Array(3)].map((_, i) => <div key={i} className="shimmer" style={{ height: 60, marginBottom: 10, borderRadius: 12 }} />)}
+    </div>
+  );
+
+  const isComplete = status?.onboardingComplete;
+  const isPartial = status?.connected && !status?.onboardingComplete;
+
+  return (
+    <div className="fade-in" style={{ maxWidth: 600 }}>
+      <h2 className="section-title" style={{ fontSize: '1.4rem', marginBottom: 6 }}>Stripe <em>Connect</em></h2>
+      <p className="muted" style={{ marginBottom: 24, fontSize: '.9rem' }}>
+        Connect your Stripe account to receive payouts directly when customers purchase your products. NailHaus retains a 10% platform fee.
+      </p>
+
+      {msg && (
+        <div className="panel" style={{ padding: '14px 18px', marginBottom: 20, background: msg.startsWith('✓') ? 'var(--surface-3)' : '#fff0f0', borderColor: msg.startsWith('✓') ? 'var(--border)' : '#fca5a5', color: msg.startsWith('✓') ? 'var(--text)' : '#dc2626', fontSize: '.9rem', fontWeight: 600 }}>
+          {msg}
+        </div>
+      )}
+
+      <div className="panel" style={{ padding: 28 }}>
+        {isComplete ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+              <div style={{ width: 52, height: 52, borderRadius: 16, background: '#dcfce7', display: 'grid', placeItems: 'center', fontSize: '1.6rem', flexShrink: 0 }}>✓</div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#16a34a' }}>Stripe account connected</div>
+                <div className="muted" style={{ fontSize: '.82rem', marginTop: 2 }}>You will automatically receive payouts for your sales, minus the platform fee.</div>
+              </div>
+            </div>
+            <div style={{ background: 'var(--surface-1)', borderRadius: 10, padding: '12px 16px', fontSize: '.82rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span className="muted">Account ID</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '.78rem' }}>{status?.accountId}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span className="muted">Platform fee</span>
+                <span style={{ fontWeight: 700 }}>10%</span>
+              </div>
+            </div>
+            <button className="pill btn-ghost btn-sm" style={{ marginTop: 16 }} onClick={handleConnect} disabled={connecting}>
+              {connecting ? '⏳ Loading…' : '↻ Re-connect / update account'}
+            </button>
+          </>
+        ) : isPartial ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+              <div style={{ width: 52, height: 52, borderRadius: 16, background: '#fef9c3', display: 'grid', placeItems: 'center', fontSize: '1.6rem', flexShrink: 0 }}>⚠️</div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#ca8a04' }}>Onboarding incomplete</div>
+                <div className="muted" style={{ fontSize: '.82rem', marginTop: 2 }}>Your Stripe account was created but onboarding wasn't finished. Complete it to receive payouts.</div>
+              </div>
+            </div>
+            <button className="pill btn-primary" onClick={handleConnect} disabled={connecting}>
+              {connecting ? '⏳ Loading…' : '▶ Complete Stripe onboarding'}
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+              <div style={{ width: 52, height: 52, borderRadius: 16, background: 'var(--surface-1)', display: 'grid', placeItems: 'center', fontSize: '1.6rem', flexShrink: 0 }}>💳</div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '1rem' }}>Not connected</div>
+                <div className="muted" style={{ fontSize: '.82rem', marginTop: 2 }}>Connect a Stripe Express account to start receiving payouts from your sales.</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+              {[
+                { icon: '⚡', text: 'Set up in minutes with Stripe Express' },
+                { icon: '💸', text: 'Automatic payouts to your bank account' },
+                { icon: '🔒', text: 'Secure — NailHaus never stores your banking info' },
+                { icon: '📊', text: 'View your earnings in your Stripe dashboard' },
+              ].map(({ icon, text }) => (
+                <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '.88rem' }}>
+                  <span style={{ fontSize: '1.1rem' }}>{icon}</span>
+                  <span>{text}</span>
+                </div>
+              ))}
+            </div>
+            <button className="pill btn-primary" onClick={handleConnect} disabled={connecting} style={{ fontSize: '1rem', padding: '12px 28px' }}>
+              {connecting ? '⏳ Loading…' : '🔗 Connect Stripe account'}
+            </button>
+          </>
+        )}
+      </div>
+
+      <p className="muted" style={{ fontSize: '.72rem', marginTop: 12 }}>
+        ℹ️ Powered by <strong>Stripe Connect</strong>. Multi-vendor orders are processed by the platform and payouts are routed to each vendor automatically.
+      </p>
     </div>
   );
 }

@@ -22,12 +22,12 @@ export async function POST(req: NextRequest) {
 
   // Fetch all products
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
-  const orderItems: { productId: string; vendorId: string; qty: number; price: number; size?: string }[] = [];
+  const orderItems: { productId: string; vendorId: string; qty: number; price: number; size?: string; stripeAccountId?: string | null }[] = [];
 
   for (const item of items) {
     const { data: product } = await supabaseAdmin
       .from('products')
-      .select('id, vendor_id, name, price, emoji, availability')
+      .select('id, vendor_id, name, price, emoji, availability, vendors!vendor_id(stripe_account_id, stripe_onboarding_complete)')
       .eq('id', item.productId)
       .eq('hidden', false)
       .single();
@@ -49,12 +49,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const vendor = product.vendors as { stripe_account_id: string | null; stripe_onboarding_complete: boolean } | null;
     orderItems.push({
       productId: product.id,
       vendorId: product.vendor_id,
       qty,
       price: Number(product.price),
       size: item.size,
+      stripeAccountId: vendor?.stripe_onboarding_complete ? (vendor.stripe_account_id ?? null) : null,
     });
   }
 
@@ -80,6 +82,14 @@ export async function POST(req: NextRequest) {
     }))
   );
 
+  // If all items belong to the same connected vendor, route funds via Stripe Connect.
+  // Platform takes a 10% fee; vendor receives 90%.
+  const PLATFORM_FEE_PCT = 0.10;
+  const uniqueStripeAccounts = [...new Set(orderItems.map(i => i.stripeAccountId).filter(Boolean))];
+  const singleConnectedVendor = uniqueStripeAccounts.length === 1 ? uniqueStripeAccounts[0] : null;
+  const totalCents = Math.round(total * 100);
+  const feeCents = singleConnectedVendor ? Math.round(totalCents * PLATFORM_FEE_PCT) : 0;
+
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: 'payment',
     line_items: lineItems,
@@ -91,6 +101,12 @@ export async function POST(req: NextRequest) {
     success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/cart`,
     shipping_address_collection: { allowed_countries: ['US', 'CA', 'GB', 'AU'] },
+    ...(singleConnectedVendor ? {
+      payment_intent_data: {
+        application_fee_amount: feeCents,
+        transfer_data: { destination: singleConnectedVendor as string },
+      },
+    } : {}),
   };
 
   const session = await stripe.checkout.sessions.create(sessionParams);
