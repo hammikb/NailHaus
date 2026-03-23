@@ -31,9 +31,9 @@ export function NailTryOn({ productName, nailImageUrl, nailEmoji, nailBgColor }:
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Load the nail product image once
-  const loadNailImage = useCallback(() => {
+  const loadNailImage = useCallback((): Promise<HTMLImageElement | null> => {
     if (nailImg || !nailImageUrl) return Promise.resolve(nailImg);
-    return new Promise<HTMLImageElement>((resolve) => {
+    return new Promise<HTMLImageElement | null>((resolve) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => { setNailImg(img); resolve(img); };
