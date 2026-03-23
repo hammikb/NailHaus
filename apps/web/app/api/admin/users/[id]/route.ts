@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, getAuthUser } from '@/lib/route-helpers';
 
-const DEFAULT_VENDOR_EMOJI = '💅';
+const DEFAULT_VENDOR_EMOJI = '\u{1F485}';
 const DEFAULT_VENDOR_COLOR = '#fde8e8';
 
 function getVendorName(name: string) {

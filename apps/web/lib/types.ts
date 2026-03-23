@@ -166,6 +166,14 @@ export interface AdminStats {
   totalRevenue: number;
   recentUsers: Array<{ id: string; name: string; role: string; createdAt: string }>;
   recentOrders: Array<{ id: string; buyerName: string; total: number; status: string; createdAt: string }>;
+  recentAdminActions: Array<{
+    id: string;
+    action: string;
+    entityType: string;
+    entityId: string;
+    note: string;
+    createdAt: string;
+  }>;
 }
 
 export interface AdminUser {

@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     { data: revenueRows },
     { data: recentUsersRows },
     { data: recentOrdersRows },
+    { data: recentAdminActionsRows },
   ] = await Promise.all([
     supabaseAdmin.from('vendors').select('*', { count: 'exact', head: true }),
     supabaseAdmin.from('vendors').select('*', { count: 'exact', head: true }).eq('verified', true),
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest) {
     supabaseAdmin.from('orders').select('total'),
     supabaseAdmin.from('profiles').select('id, name, role, created_at').order('created_at', { ascending: false }).limit(6),
     supabaseAdmin.from('orders').select('id, total, status, created_at, profiles!user_id(name)').order('created_at', { ascending: false }).limit(6),
+    supabaseAdmin.from('admin_audit').select('id, action, entity_type, entity_id, note, created_at').order('created_at', { ascending: false }).limit(8),
   ]);
 
   const totalRevenue = (revenueRows || []).reduce((sum: number, order: { total: string | number }) => sum + Number(order.total), 0);
@@ -59,6 +61,14 @@ export async function GET(req: NextRequest) {
       total: Number(order.total || 0),
       status: String(order.status || 'unknown'),
       createdAt: String(order.created_at || new Date().toISOString()),
+    })),
+    recentAdminActions: (recentAdminActionsRows || []).map((row: Record<string, unknown>) => ({
+      id: String(row.id),
+      action: String(row.action || 'update_user'),
+      entityType: String(row.entity_type || 'record'),
+      entityId: String(row.entity_id || ''),
+      note: String(row.note || ''),
+      createdAt: String(row.created_at || new Date().toISOString()),
     })),
   });
 }
