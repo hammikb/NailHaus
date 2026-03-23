@@ -1835,6 +1835,10 @@ function StripeConnectTab() {
       setMsg('✓ Stripe account connected! Your payouts are now set up.');
       window.history.replaceState({}, '', window.location.pathname);
     }
+    if (params.get('stripe') === 'incomplete') {
+      setMsg('Stripe onboarding is not finished yet. Complete the remaining Stripe steps to receive payouts.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
 
     authFetch('/api/vendors/me/stripe-connect')
       .then(r => r.json())

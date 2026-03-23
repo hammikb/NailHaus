@@ -6,6 +6,20 @@ function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' });
 }
 
+type VendorStripeRow = {
+  stripe_account_id: string | null;
+  stripe_onboarding_complete: boolean;
+};
+
+function getJoinedVendor(value: unknown): VendorStripeRow | null {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return first && typeof first === 'object' ? (first as VendorStripeRow) : null;
+  }
+  return typeof value === 'object' ? (value as VendorStripeRow) : null;
+}
+
 export async function POST(req: NextRequest) {
   const stripe = getStripe();
 
@@ -49,7 +63,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const vendor = product.vendors as { stripe_account_id: string | null; stripe_onboarding_complete: boolean } | null;
+    const vendor = getJoinedVendor(product.vendors);
     orderItems.push({
       productId: product.id,
       vendorId: product.vendor_id,

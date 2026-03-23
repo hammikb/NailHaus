@@ -3,36 +3,32 @@ import Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/route-helpers';
 
 // Stripe redirects here after the vendor completes (or skips) onboarding.
-// We verify the account's charges_enabled to determine if onboarding is truly complete.
+// The vendor/account id is passed through the account link URLs so we only
+// update the account that actually completed onboarding.
 export async function GET(req: NextRequest) {
   const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
   const proto = req.headers.get('x-forwarded-proto') ?? 'https';
   const origin = `${proto}://${host}`;
+  const { searchParams } = new URL(req.url);
+  const accountId = searchParams.get('account_id');
+  const vendorId = searchParams.get('vendor_id');
 
-  // account_id isn't passed back by Stripe in the return URL — we need to
-  // match by looking for vendors whose onboarding is not yet complete.
-  // The safer approach: let the vendor dashboard re-poll GET /api/vendors/me/stripe-connect
-  // and check via Stripe API. For now we mark tentatively and let the dashboard verify.
+  if (!accountId || !vendorId) {
+    return NextResponse.redirect(`${origin}/dashboard/vendor`);
+  }
 
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' });
+  const account = await stripe.accounts.retrieve(accountId);
+  const onboardingComplete = Boolean(account.details_submitted && account.payouts_enabled);
 
-  // Find all vendors with a stripe_account_id but not yet marked complete
-  const { data: vendors } = await supabaseAdmin
+  await supabaseAdmin
     .from('vendors')
-    .select('id, stripe_account_id')
-    .not('stripe_account_id', 'is', null)
-    .eq('stripe_onboarding_complete', false);
+    .update({ stripe_onboarding_complete: onboardingComplete })
+    .eq('id', vendorId)
+    .eq('stripe_account_id', accountId);
 
-  if (vendors) {
-    for (const vendor of vendors) {
-      const account = await stripe.accounts.retrieve(vendor.stripe_account_id as string);
-      if (account.charges_enabled) {
-        await supabaseAdmin
-          .from('vendors')
-          .update({ stripe_onboarding_complete: true })
-          .eq('id', vendor.id);
-      }
-    }
+  if (!onboardingComplete) {
+    return NextResponse.redirect(`${origin}/dashboard/vendor?stripe=incomplete`);
   }
 
   return NextResponse.redirect(`${origin}/dashboard/vendor?stripe=connected`);
