@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   // If plan has a Stripe price ID, create a Stripe Checkout session
   if (plan.stripe_price_id) {
     const stripe = (await import('stripe')).default;
-    const stripeClient = new stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-01-27.acacia' });
+    const stripeClient = new stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' });
 
     const session = await stripeClient.checkout.sessions.create({
       mode: 'subscription',
