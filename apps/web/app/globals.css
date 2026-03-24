@@ -216,6 +216,86 @@ button { cursor: pointer; }
 .badge-new { background: linear-gradient(135deg,#eff6ff,#dbeafe); color: #1d4ed8; border-color: #bfdbfe; }
 .badge-sale { background: linear-gradient(135deg,#fefce8,#fef9c3); color: #a16207; border-color: #fde68a; }
 .card-body { padding: 18px 20px 20px; }
+.product-title {
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.3;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.product-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.product-price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.product-card-compact .product-thumb { min-height: 168px; }
+.product-card-ultra .product-thumb { min-height: 128px; }
+.product-card-compact .card-body { padding: 14px 14px 16px; }
+.product-card-ultra .card-body { padding: 10px 10px 12px; }
+.product-card-compact .vendor-chip {
+  margin-bottom: 4px;
+  font-size: .72rem;
+}
+.product-card-ultra .vendor-chip { display: none; }
+.product-title-compact {
+  font-size: .92rem;
+  margin-bottom: 5px;
+}
+.product-title-ultra {
+  font-size: .82rem;
+  margin-bottom: 4px;
+  line-height: 1.22;
+}
+.product-meta-compact {
+  margin-bottom: 10px;
+  gap: 5px;
+}
+.product-meta-ultra {
+  margin-bottom: 8px;
+  gap: 4px;
+}
+.product-meta-ultra .muted {
+  font-size: .68rem !important;
+}
+.product-price-row-compact {
+  align-items: flex-start;
+  gap: 8px;
+}
+.product-price-row-ultra {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.price-compact { font-size: 1rem; }
+.price-ultra { font-size: .94rem; }
+.product-card-compact .price-strike,
+.product-card-ultra .price-strike {
+  font-size: .72rem;
+}
+.product-card-compact .sale-pct,
+.product-card-ultra .sale-pct {
+  font-size: .62rem;
+  padding: 2px 6px;
+}
+.product-card-compact .avail-pill,
+.product-card-ultra .avail-pill {
+  max-width: 100%;
+  font-size: .62rem;
+  padding: 3px 8px;
+}
 .vendor-chip { display: inline-flex; align-items: center; gap: 5px; font-size: .78rem; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
 .vendor-chip-avatar { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: .6rem; }
 

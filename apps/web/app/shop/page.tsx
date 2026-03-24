@@ -183,7 +183,6 @@ function ShopContent() {
 
   const activeCount = [shape, style, occasion, availability, minPrice, maxPrice].filter(Boolean).length;
   const sortLabel = SORTS.find(s => s.value === sort)?.label ?? 'Popular';
-  const viewIndex = VIEW_COLUMNS.findIndex((count) => count === viewColumns);
   const productGridStyle = { '--shop-grid-columns': String(viewColumns) } as CSSProperties;
   const availLabel = availability === 'in_stock' ? 'In stock' : availability === 'made_to_order' ? 'MTO' : null;
   const priceActive = !!(minPrice || maxPrice);
@@ -295,6 +294,25 @@ function ShopContent() {
             </div>
           </FilterDropdown>
 
+          {/* View */}
+          <FilterDropdown name="view" label={`View: ${viewColumns}`} active={viewColumns !== DEFAULT_VIEW_COLUMNS} open={openFilter === 'view'} onToggle={toggleDropdown}>
+            <div className="fdd-options" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+              {VIEW_COLUMNS.map((count, index) => (
+                <button
+                  key={count}
+                  className={`fdd-option fdd-option-row${viewColumns === count ? ' active' : ''}`}
+                  onClick={() => {
+                    handleViewColumnsChange(index);
+                    setOpenFilter(null);
+                  }}
+                >
+                  {count} across
+                  {viewColumns === count && <span style={{ marginLeft: 'auto' }}>✓</span>}
+                </button>
+              ))}
+            </div>
+          </FilterDropdown>
+
           {/* Clear */}
           {activeCount > 0 && (
             <button className="pill btn-ghost btn-sm" onClick={clearAll} style={{ flexShrink: 0 }}>
@@ -313,34 +331,6 @@ function ShopContent() {
             {priceActive && <span className="active-chip">${minPrice || '0'} – {maxPrice ? '$' + maxPrice : '∞'} <button onClick={() => { setMinPrice(''); setMaxPrice(''); applyFilters({ minPrice: '', maxPrice: '' }); }}>✕</button></span>}
           </div>
         )}
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
-          <label
-            className="panel"
-            style={{
-              padding: '10px 14px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 10,
-              flexWrap: 'wrap',
-            }}
-          >
-            <span style={{ fontWeight: 800, fontSize: '.9rem' }}>View</span>
-            <select
-              value={String(viewIndex)}
-              onChange={(e) => handleViewColumnsChange(Number(e.target.value))}
-              aria-label="Choose products per row"
-              className="input"
-              style={{ minWidth: 150, paddingTop: 8, paddingBottom: 8 }}
-            >
-              {VIEW_COLUMNS.map((count, index) => (
-                <option key={count} value={index}>
-                  {count} across
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
 
         {/* Results */}
         {loading ? (
@@ -363,7 +353,13 @@ function ShopContent() {
           </div>
         ) : (
           <div className="grid product-grid shop-results-grid fade-in" style={productGridStyle}>
-            {products.map(product => <ProductCard key={product.id} product={product} />)}
+            {products.map(product => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                density={viewColumns >= 9 ? 'ultra' : viewColumns >= 7 ? 'compact' : 'default'}
+              />
+            ))}
           </div>
         )}
       </div>
