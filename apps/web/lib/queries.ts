@@ -3,8 +3,8 @@
  * These call Supabase directly — no HTTP roundtrip through the API routes.
  * Keep these import-only in server components (never in 'use client' files).
  */
-import { supabaseAdmin, mapProduct, mapVendor } from './route-helpers';
-import type { Product, VendorSummary } from './types';
+import { supabaseAdmin, mapProduct, mapReview, mapVendor } from './route-helpers';
+import type { Product, Review, VendorSummary } from './types';
 
 // Cast to any before .select() so Supabase's compile-time string parser
 // doesn't choke on long explicit column lists — we apply our own mappers anyway.
@@ -81,4 +81,45 @@ export async function getTopVendors(limit = 12): Promise<VendorSummary[]> {
   return ((data as Record<string, unknown>[]) || []).map(
     (v) => mapVendor(v) as unknown as VendorSummary
   );
+}
+
+export interface HomePageStats {
+  verifiedVendors: number;
+  liveSets: number;
+  customerReviews: number;
+}
+
+export async function getHomePageStats(): Promise<HomePageStats> {
+  const [{ count: verifiedVendors }, { count: liveSets }, { count: customerReviews }] = await Promise.all([
+    db.from('vendors').select('id', { count: 'exact', head: true }).eq('verified', true),
+    db.from('products').select('id', { count: 'exact', head: true }).eq('hidden', false),
+    db.from('reviews').select('id', { count: 'exact', head: true }),
+  ]);
+
+  return {
+    verifiedVendors: verifiedVendors || 0,
+    liveSets: liveSets || 0,
+    customerReviews: customerReviews || 0,
+  };
+}
+
+export async function getHomePageReviews(limit = 3): Promise<Review[]> {
+  const { data } = await db
+    .from('reviews')
+    .select('*, profiles!user_id(name), products!product_id(id, name, hidden)')
+    .order('created_at', { ascending: false })
+    .limit(Math.max(limit * 3, 9));
+
+  return ((data as Record<string, unknown>[]) || [])
+    .filter((reviewRow) => {
+      const body = String(reviewRow.body || '').trim();
+      const product = reviewRow.products as { hidden?: boolean } | null;
+      return body.length > 0 && !product?.hidden;
+    })
+    .slice(0, limit)
+    .map((reviewRow) => {
+      const profile = reviewRow.profiles as { name: string } | null;
+      const product = reviewRow.products as { id: string; name: string } | null;
+      return mapReview(reviewRow, profile, product);
+    }) as unknown as Review[];
 }

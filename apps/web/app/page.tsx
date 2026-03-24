@@ -2,8 +2,7 @@ import Link from 'next/link';
 import { ProductCard } from '@/components/ProductCard';
 import { VendorCard } from '@/components/VendorCard';
 import { RecentlyViewedStrip } from '@/components/RecentlyViewed';
-import { SocialProofTicker } from '@/components/SocialProofTicker';
-import { getPopularProducts, getTopVendors, getNewArrivals, getEditorialLooks } from '@/lib/queries';
+import { getPopularProducts, getTopVendors, getNewArrivals, getEditorialLooks, getHomePageReviews, getHomePageStats } from '@/lib/queries';
 
 // Revalidate the home page at most once per minute.
 // Queries Supabase directly — no internal HTTP roundtrip through the API routes.
@@ -18,12 +17,21 @@ const CATEGORIES = [
   { label: 'Minimal', emoji: '🤍', href: '/shop?style=minimal', color: '#f0ede8' },
 ];
 
+function formatStat(value: number) {
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 export default async function HomePage() {
-  const [products, vendors, newArrivals, editorialLooks] = await Promise.all([
+  const [products, vendors, newArrivals, editorialLooks, stats, reviews] = await Promise.all([
     getPopularProducts(8).catch(() => []),
     getTopVendors().catch(() => []),
     getNewArrivals(8).catch(() => []),
     getEditorialLooks().catch(() => []),
+    getHomePageStats().catch(() => ({ verifiedVendors: 0, liveSets: 0, customerReviews: 0 })),
+    getHomePageReviews(3).catch(() => []),
   ]);
 
   return (
@@ -48,16 +56,16 @@ export default async function HomePage() {
             </div>
             <div className="stats">
               <div className="stat">
-                <strong style={{ color: 'var(--accent)' }}>240+</strong>
+                <strong style={{ color: 'var(--accent)' }}>{formatStat(stats.verifiedVendors)}</strong>
                 <span className="muted" style={{ fontSize: '.8rem' }}>Verified vendors</span>
               </div>
               <div className="stat">
-                <strong style={{ color: 'var(--accent)' }}>12k+</strong>
+                <strong style={{ color: 'var(--accent)' }}>{formatStat(stats.liveSets)}</strong>
                 <span className="muted" style={{ fontSize: '.8rem' }}>Listed sets</span>
               </div>
               <div className="stat">
-                <strong style={{ color: 'var(--accent)' }}>98k+</strong>
-                <span className="muted" style={{ fontSize: '.8rem' }}>Happy customers</span>
+                <strong style={{ color: 'var(--accent)' }}>{formatStat(stats.customerReviews)}</strong>
+                <span className="muted" style={{ fontSize: '.8rem' }}>Customer reviews</span>
               </div>
             </div>
           </div>
@@ -71,8 +79,64 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ─── Social Proof Ticker ────────────────── */}
-      <SocialProofTicker />
+      {/* ─── Customer Reviews ───────────────────── */}
+      {reviews.length > 0 && (
+        <section className="section" style={{ paddingTop: 8 }}>
+          <div className="container">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Verified buyers</p>
+                <h2 className="section-title">Real customer <em>reviews</em></h2>
+              </div>
+              <span className="chip">
+                {stats.customerReviews} total review{stats.customerReviews !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <div
+              className="grid"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
+            >
+              {reviews.map((review) => (
+                <Link
+                  key={review.id}
+                  href={review.product ? `/products/${review.product.id}` : '/shop'}
+                  className="list-item"
+                  style={{ display: 'block', color: 'inherit' }}
+                >
+                  <div className="between" style={{ alignItems: 'flex-start', gap: 12 }}>
+                    <div>
+                      <strong style={{ fontSize: '.92rem' }}>{review.user?.name || 'Anonymous'}</strong>
+                      {review.product && (
+                        <div className="muted" style={{ fontSize: '.76rem', marginTop: 4 }}>
+                          Re: {review.product.name}
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ color: '#f59e0b', fontSize: '.85rem', flexShrink: 0 }}>
+                      {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}
+                    </span>
+                  </div>
+                  {review.title && (
+                    <div style={{ marginTop: 10, fontWeight: 700, fontSize: '.92rem' }}>
+                      {review.title}
+                    </div>
+                  )}
+                  <p className="subtle" style={{ margin: '8px 0 0', fontSize: '.89rem', lineHeight: 1.6 }}>
+                    {review.body}
+                  </p>
+                  <div className="muted" style={{ fontSize: '.73rem', marginTop: 10 }}>
+                    {new Date(review.createdAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ─── Categories ─────────────────────────── */}
       <section className="section" style={{ paddingTop: 8 }}>
@@ -202,7 +266,7 @@ export default async function HomePage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 16 }}>
             {[
-              { emoji: '🔍', title: 'Browse & discover', desc: 'Explore thousands of handcrafted press-on sets from indie artists worldwide.' },
+              { emoji: '🔍', title: 'Browse & discover', desc: 'Explore handcrafted press-on sets from independent artists in one place.' },
               { emoji: '🛒', title: 'Add to cart', desc: 'Choose your favourites. Mix sets from multiple vendors in one order.' },
               { emoji: '📦', title: 'Artist ships to you', desc: 'Your vendor prepares and ships directly. Track every step of the way.' },
               { emoji: '💅', title: 'Slay your look', desc: 'Apply in minutes. Salon-quality nails without the salon price or wait.' },
@@ -248,7 +312,7 @@ export default async function HomePage() {
               Sell your nail art on NailHaus
             </h2>
             <p style={{ color: 'rgba(255,255,255,.82)', lineHeight: 1.65, maxWidth: 460, margin: '0 auto 24px' }}>
-              Join 240+ independent artists. Set up your storefront in minutes, reach thousands of buyers, and keep more of every sale.
+              Set up your storefront in minutes, reach NailHaus shoppers, and keep more of every sale.
             </p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Link href="/signup" className="pill" style={{ background: 'white', color: 'var(--accent)', borderColor: 'white', fontWeight: 700 }}>
