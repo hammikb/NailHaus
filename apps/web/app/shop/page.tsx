@@ -99,7 +99,6 @@ function ShopContent() {
     return Number.isFinite(param) ? getClosestViewColumns(param) : DEFAULT_VIEW_COLUMNS;
   });
   const [openFilter, setOpenFilter] = useState<string | null>(null);
-  const [showViewControl, setShowViewControl] = useState(false);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const priceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -315,86 +314,32 @@ function ShopContent() {
           </div>
         )}
 
-        <div
-          style={{ position: 'relative', display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}
-          onMouseEnter={() => setShowViewControl(true)}
-          onMouseLeave={() => setShowViewControl(false)}
-        >
-          <button
-            type="button"
-            className="pill btn-ghost btn-sm"
-            aria-expanded={showViewControl}
-            onFocus={() => setShowViewControl(true)}
-            onBlur={(e) => {
-              if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node | null)) {
-                setShowViewControl(false);
-              }
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+          <label
+            className="panel"
+            style={{
+              padding: '10px 14px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
             }}
           >
-            View: {viewColumns} across
-          </button>
-
-          {showViewControl && (
-            <div
-              className="panel"
-              style={{
-                position: 'absolute',
-                top: 'calc(100% + 10px)',
-                right: 0,
-                width: 'min(320px, calc(100vw - 32px))',
-                padding: '16px 18px',
-                zIndex: 4,
-              }}
-              onFocus={() => setShowViewControl(true)}
-              onBlur={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                  setShowViewControl(false);
-                }
-              }}
+            <span style={{ fontWeight: 800, fontSize: '.9rem' }}>View</span>
+            <select
+              value={String(viewIndex)}
+              onChange={(e) => handleViewColumnsChange(Number(e.target.value))}
+              aria-label="Choose products per row"
+              className="input"
+              style={{ minWidth: 150, paddingTop: 8, paddingBottom: 8 }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: '.9rem' }}>Grid density</div>
-                  <div className="muted" style={{ fontSize: '.78rem' }}>Choose how many sets show across</div>
-                </div>
-                <span className="chip" style={{ minWidth: 72, justifyContent: 'center', fontVariantNumeric: 'tabular-nums' }}>
-                  {viewColumns} across
-                </span>
-              </div>
-
-              <input
-                type="range"
-                min={0}
-                max={VIEW_COLUMNS.length - 1}
-                step={1}
-                value={Math.max(0, viewIndex)}
-                onChange={(e) => handleViewColumnsChange(Number(e.target.value))}
-                aria-label="Adjust products per row"
-                style={{ width: '100%', accentColor: 'var(--accent)', marginBottom: 10 }}
-              />
-
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${VIEW_COLUMNS.length}, minmax(0, 1fr))`, gap: 8 }}>
-                {VIEW_COLUMNS.map((count) => (
-                  <button
-                    key={count}
-                    type="button"
-                    className={`chip${viewColumns === count ? ' active' : ''}`}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => handleViewColumnsChange(VIEW_COLUMNS.indexOf(count))}
-                    style={{
-                      justifyContent: 'center',
-                      borderColor: viewColumns === count ? 'var(--accent)' : undefined,
-                      background: viewColumns === count ? 'var(--accent-soft)' : undefined,
-                      color: viewColumns === count ? 'var(--accent-dark)' : undefined,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {count}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+              {VIEW_COLUMNS.map((count, index) => (
+                <option key={count} value={index}>
+                  {count} across
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {/* Results */}
