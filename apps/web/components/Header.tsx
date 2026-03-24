@@ -49,7 +49,6 @@ export function Header() {
             <Link href="/shop" className={`nav-link${isShop ? ' nav-link-active' : ''}`}>Shop</Link>
             <Link href="/vendors" className={`nav-link${isVendors ? ' nav-link-active' : ''}`}>Vendors</Link>
             <Link href="/quiz" className={`nav-link${pathname === '/quiz' ? ' nav-link-active' : ''}`}>Style Quiz</Link>
-            <Link href="/subscribe" className={`nav-link${pathname === '/subscribe' ? ' nav-link-active' : ''}`}>Subscribe</Link>
             {user?.role === 'vendor' && (
               <Link href="/dashboard/vendor" className={`nav-link${isDashboard ? ' nav-link-active' : ''}`}>Dashboard</Link>
             )}

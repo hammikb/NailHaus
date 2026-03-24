@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import { ImportResult, PayoutSummary, Product, ShippingRate, VendorDashboard } from '@/lib/types';
 
-type Tab = 'overview' | 'products' | 'analytics' | 'import' | 'payouts' | 'insights' | 'subscriptions' | 'stripe' | 'profile';
+type Tab = 'overview' | 'products' | 'analytics' | 'import' | 'payouts' | 'insights' | 'stripe' | 'profile';
 type AnalyticsRow = { productId: string; name: string; emoji: string; bgColor: string; imageUrl: string | null; orders: number; units: number; revenue: number };
 type ImportMode = 'json' | 'csv' | 'etsy';
 
@@ -712,7 +712,7 @@ export function VendorDashboardClient() {
 
       {/* Tab nav */}
       <div className="tab-nav">
-        {(['overview', 'products', 'analytics', 'import', 'payouts', 'insights', 'subscriptions', 'stripe', 'profile'] as Tab[]).map(t => (
+        {(['overview', 'products', 'analytics', 'import', 'payouts', 'insights', 'stripe', 'profile'] as Tab[]).map(t => (
           <button key={t} className={`tab-btn${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
             {t === 'overview' ? '📊 Overview' :
              t === 'products' ? `💅 Products (${products.length})` :
@@ -720,7 +720,6 @@ export function VendorDashboardClient() {
              t === 'import' ? '📥 Import' :
              t === 'payouts' ? '💰 Payouts' :
              t === 'insights' ? '💡 Insights' :
-             t === 'subscriptions' ? '📦 Subscriptions' :
              t === 'stripe' ? '💳 Stripe Connect' : '✏️ Profile'}
           </button>
         ))}
@@ -1512,9 +1511,6 @@ export function VendorDashboardClient() {
 
       {/* ═══ INSIGHTS TAB ══════════════════════════════ */}
       {tab === 'insights' && <InsightsTab />}
-
-      {/* ═══ SUBSCRIPTIONS TAB ═════════════════════════ */}
-      {tab === 'subscriptions' && <SubscriptionPlansTab />}
 
       {/* ═══ STRIPE CONNECT TAB ════════════════════════ */}
       {tab === 'stripe' && <StripeConnectTab />}
