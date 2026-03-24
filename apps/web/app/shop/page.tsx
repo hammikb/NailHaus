@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense, type CSSProperties } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { ProductCard } from '@/components/ProductCard';
 import { api } from '@/lib/api';
@@ -16,18 +16,13 @@ const SORTS = [
   { value: 'price_asc', label: 'Price ↑' },
   { value: 'price_desc', label: 'Price ↓' },
 ];
-const MIN_VIEW_SIZE = 170;
-const MAX_VIEW_SIZE = 320;
-const DEFAULT_VIEW_SIZE = 230;
+const VIEW_COLUMNS = [3, 5, 7, 9] as const;
+const DEFAULT_VIEW_COLUMNS = 5;
 
-function clampViewSize(value: number) {
-  return Math.min(MAX_VIEW_SIZE, Math.max(MIN_VIEW_SIZE, value));
-}
-
-function getViewSizeLabel(value: number) {
-  if (value <= 200) return 'Compact';
-  if (value >= 280) return 'Spacious';
-  return 'Balanced';
+function getClosestViewColumns(value: number) {
+  return VIEW_COLUMNS.reduce((closest, current) => (
+    Math.abs(current - value) < Math.abs(closest - value) ? current : closest
+  ), DEFAULT_VIEW_COLUMNS);
 }
 
 /* ─── Dropdown component ──────────────────────────────── */
@@ -99,11 +94,12 @@ function ShopContent() {
   const [minPrice, setMinPrice] = useState(() => searchParams.get('minPrice') ?? '');
   const [maxPrice, setMaxPrice] = useState(() => searchParams.get('maxPrice') ?? '');
   const [sort, setSort] = useState(() => searchParams.get('sort') ?? 'popular');
-  const [viewSize, setViewSize] = useState(() => {
+  const [viewColumns, setViewColumns] = useState(() => {
     const param = Number(searchParams.get('view'));
-    return Number.isFinite(param) ? clampViewSize(param) : DEFAULT_VIEW_SIZE;
+    return Number.isFinite(param) ? getClosestViewColumns(param) : DEFAULT_VIEW_COLUMNS;
   });
   const [openFilter, setOpenFilter] = useState<string | null>(null);
+  const [showViewControl, setShowViewControl] = useState(false);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const priceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -122,11 +118,11 @@ function ShopContent() {
   }
 
   function pushParams(overrides: Record<string, string> = {}) {
-    const current = { search, shape, style, occasion, availability, sort, minPrice, maxPrice, view: String(viewSize) };
+    const current = { search, shape, style, occasion, availability, sort, minPrice, maxPrice, view: String(viewColumns) };
     const merged = { ...current, ...overrides };
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(merged)) {
-      if (v && !(k === 'sort' && v === 'popular') && !(k === 'view' && Number(v) === DEFAULT_VIEW_SIZE)) params.set(k, v);
+      if (v && !(k === 'sort' && v === 'popular') && !(k === 'view' && Number(v) === DEFAULT_VIEW_COLUMNS)) params.set(k, v);
     }
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
@@ -188,17 +184,17 @@ function ShopContent() {
 
   const activeCount = [shape, style, occasion, availability, minPrice, maxPrice].filter(Boolean).length;
   const sortLabel = SORTS.find(s => s.value === sort)?.label ?? 'Popular';
-  const viewLabel = getViewSizeLabel(viewSize);
-  const productGridStyle = { gridTemplateColumns: `repeat(auto-fill, minmax(${viewSize}px, 1fr))` };
+  const viewIndex = VIEW_COLUMNS.findIndex((count) => count === viewColumns);
+  const productGridStyle = { '--shop-grid-columns': String(viewColumns) } as CSSProperties;
   const availLabel = availability === 'in_stock' ? 'In stock' : availability === 'made_to_order' ? 'MTO' : null;
   const priceActive = !!(minPrice || maxPrice);
   const priceLabel = priceActive
     ? `$${minPrice || '0'} – ${maxPrice ? '$' + maxPrice : '∞'}`
     : 'Price';
 
-  function handleViewSizeChange(nextValue: number) {
-    const next = clampViewSize(nextValue);
-    setViewSize(next);
+  function handleViewColumnsChange(nextIndex: number) {
+    const next = VIEW_COLUMNS[Math.min(VIEW_COLUMNS.length - 1, Math.max(0, nextIndex))];
+    setViewColumns(next);
     pushParams({ view: String(next) });
   }
 
@@ -320,43 +316,90 @@ function ShopContent() {
         )}
 
         <div
-          className="panel"
-          style={{
-            padding: '14px 18px',
-            marginBottom: 20,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-            flexWrap: 'wrap',
-          }}
+          style={{ position: 'relative', display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}
+          onMouseEnter={() => setShowViewControl(true)}
+          onMouseLeave={() => setShowViewControl(false)}
         >
-          <div style={{ minWidth: 120 }}>
-            <div style={{ fontWeight: 800, fontSize: '.9rem' }}>View size</div>
-            <div className="muted" style={{ fontSize: '.78rem' }}>{viewLabel} layout</div>
-          </div>
-          <span className="muted" style={{ fontSize: '.78rem' }}>Small</span>
-          <input
-            type="range"
-            min={MIN_VIEW_SIZE}
-            max={MAX_VIEW_SIZE}
-            step={10}
-            value={viewSize}
-            onChange={(e) => handleViewSizeChange(Number(e.target.value))}
-            aria-label="Adjust product grid size"
-            style={{ flex: '1 1 220px', accentColor: 'var(--accent)' }}
-          />
-          <span className="muted" style={{ fontSize: '.78rem' }}>Large</span>
-          <span
-            className="chip"
-            style={{ minWidth: 68, justifyContent: 'center', fontVariantNumeric: 'tabular-nums' }}
+          <button
+            type="button"
+            className="pill btn-ghost btn-sm"
+            aria-expanded={showViewControl}
+            onFocus={() => setShowViewControl(true)}
+            onBlur={(e) => {
+              if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node | null)) {
+                setShowViewControl(false);
+              }
+            }}
           >
-            {viewSize}px
-          </span>
+            View: {viewColumns} across
+          </button>
+
+          {showViewControl && (
+            <div
+              className="panel"
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 10px)',
+                right: 0,
+                width: 'min(320px, calc(100vw - 32px))',
+                padding: '16px 18px',
+                zIndex: 4,
+              }}
+              onFocus={() => setShowViewControl(true)}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                  setShowViewControl(false);
+                }
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '.9rem' }}>Grid density</div>
+                  <div className="muted" style={{ fontSize: '.78rem' }}>Choose how many sets show across</div>
+                </div>
+                <span className="chip" style={{ minWidth: 72, justifyContent: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                  {viewColumns} across
+                </span>
+              </div>
+
+              <input
+                type="range"
+                min={0}
+                max={VIEW_COLUMNS.length - 1}
+                step={1}
+                value={Math.max(0, viewIndex)}
+                onChange={(e) => handleViewColumnsChange(Number(e.target.value))}
+                aria-label="Adjust products per row"
+                style={{ width: '100%', accentColor: 'var(--accent)', marginBottom: 10 }}
+              />
+
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${VIEW_COLUMNS.length}, minmax(0, 1fr))`, gap: 8 }}>
+                {VIEW_COLUMNS.map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    className={`chip${viewColumns === count ? ' active' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleViewColumnsChange(VIEW_COLUMNS.indexOf(count))}
+                    style={{
+                      justifyContent: 'center',
+                      borderColor: viewColumns === count ? 'var(--accent)' : undefined,
+                      background: viewColumns === count ? 'var(--accent-soft)' : undefined,
+                      color: viewColumns === count ? 'var(--accent-dark)' : undefined,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {count}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Results */}
         {loading ? (
-          <div className="grid product-grid" style={productGridStyle}>
+          <div className="grid product-grid shop-results-grid" style={productGridStyle}>
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="card" style={{ overflow: 'hidden' }}>
                 <div className="shimmer" style={{ height: 210 }} />
@@ -374,11 +417,22 @@ function ShopContent() {
             <p>No products match your filters. Try adjusting or clearing them.</p>
           </div>
         ) : (
-          <div className="grid product-grid fade-in" style={productGridStyle}>
+          <div className="grid product-grid shop-results-grid fade-in" style={productGridStyle}>
             {products.map(product => <ProductCard key={product.id} product={product} />)}
           </div>
         )}
       </div>
+      <style jsx>{`
+        .shop-results-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        @media (min-width: 900px) {
+          .shop-results-grid {
+            grid-template-columns: repeat(var(--shop-grid-columns, 5), minmax(0, 1fr));
+          }
+        }
+      `}</style>
     </main>
   );
 }
