@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin, getAuthUser, err } from '@/lib/route-helpers';
+import { buildCheckoutShippingQuote, loadShippingVendorsForCheckout, normalizeShippingAddress } from '@/lib/shipping';
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' });
@@ -27,8 +28,13 @@ export async function POST(req: NextRequest) {
   const user = await getAuthUser(req);
 
   const body = await req.json().catch(() => ({}));
-  const { items } = body as { items: { productId: string; qty: number; size?: string }[] };
+  const { items } = body as {
+    items: { productId: string; qty: number; size?: string }[];
+    shippingAddress?: Record<string, unknown>;
+  };
   if (!items?.length) return err('No items provided');
+
+  const shippingAddress = normalizeShippingAddress(body.shippingAddress);
 
   const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
   const proto = req.headers.get('x-forwarded-proto') ?? 'https';
@@ -75,13 +81,28 @@ export async function POST(req: NextRequest) {
   }
 
   // Create a pending order — user_id is null for guests
-  const total = orderItems.reduce((s, i) => s + i.price * i.qty, 0);
+  const subtotal = orderItems.reduce((s, i) => s + i.price * i.qty, 0);
+  let shippingQuote;
+  try {
+    const vendors = await loadShippingVendorsForCheckout(
+      orderItems.map((item) => ({ productId: item.productId, qty: item.qty }))
+    );
+    shippingQuote = await buildCheckoutShippingQuote(vendors, shippingAddress);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : 'Could not calculate shipping', 422);
+  }
+
+  const total = subtotal + shippingQuote.totalPriceCharged;
+  const originalTotal = subtotal + shippingQuote.totalPriceCharged;
   const { data: order, error: orderError } = await supabaseAdmin.from('orders').insert({
     user_id: user?.id ?? null,
     total: Math.round(total * 100) / 100,
-    original_total: Math.round(total * 100) / 100,
+    original_total: Math.round(originalTotal * 100) / 100,
     status: 'pending_payment',
-    shipping_address: {},
+    shipping_address: {
+      ...shippingAddress,
+      _shippingQuote: shippingQuote,
+    },
   }).select().single();
 
   if (orderError || !order) return err('Failed to create order', 500);
@@ -93,6 +114,7 @@ export async function POST(req: NextRequest) {
       vendor_id: i.vendorId,
       qty: i.qty,
       price: i.price,
+      size: i.size,
     }))
   );
 
@@ -102,7 +124,24 @@ export async function POST(req: NextRequest) {
   const uniqueStripeAccounts = [...new Set(orderItems.map(i => i.stripeAccountId).filter(Boolean))];
   const singleConnectedVendor = uniqueStripeAccounts.length === 1 ? uniqueStripeAccounts[0] : null;
   const totalCents = Math.round(total * 100);
-  const feeCents = singleConnectedVendor ? Math.round(totalCents * PLATFORM_FEE_PCT) : 0;
+  const productSubtotalCents = Math.round(subtotal * 100);
+  const vendorPayoutCents = singleConnectedVendor ? Math.round(productSubtotalCents * (1 - PLATFORM_FEE_PCT)) : 0;
+  const feeCents = singleConnectedVendor ? Math.max(totalCents - vendorPayoutCents, 0) : 0;
+
+  lineItems.push({
+    quantity: 1,
+    price_data: {
+      currency: 'usd',
+      unit_amount: Math.round(shippingQuote.totalPriceCharged * 100),
+      product_data: {
+        name: shippingQuote.labelCount > 1 ? 'Shipping' : 'Shipping label',
+        description: shippingQuote.vendors
+          .map((quote) => `${quote.vendorName}: ${quote.carrier} ${quote.service}`)
+          .join(' | ')
+          .slice(0, 250),
+      },
+    },
+  });
 
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: 'payment',
@@ -114,11 +153,14 @@ export async function POST(req: NextRequest) {
     metadata: { orderId: order.id, userId: user?.id ?? '' },
     success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/cart`,
-    shipping_address_collection: { allowed_countries: ['US', 'CA', 'GB', 'AU'] },
+    billing_address_collection: 'auto',
     ...(singleConnectedVendor ? {
       payment_intent_data: {
         application_fee_amount: feeCents,
-        transfer_data: { destination: singleConnectedVendor as string },
+        transfer_data: {
+          destination: singleConnectedVendor as string,
+          amount: vendorPayoutCents,
+        },
       },
     } : {}),
   };
@@ -127,5 +169,5 @@ export async function POST(req: NextRequest) {
 
   await supabaseAdmin.from('orders').update({ stripe_session_id: session.id }).eq('id', order.id);
 
-  return NextResponse.json({ url: session.url });
+  return NextResponse.json({ url: session.url, shippingQuote });
 }

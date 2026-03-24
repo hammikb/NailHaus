@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, getAuthUser, err } from '@/lib/route-helpers';
+import { getVendorQuoteFromShippingAddress, LABEL_MARKUP } from '@/lib/shipping';
 
-const MARKUP = 1.00;
+function getEasyPostAuthHeader() {
+  const apiKey = process.env.EASYPOST_API_KEY;
+  if (!apiKey) throw new Error('Shipping service not configured');
+  return `Basic ${Buffer.from(`${apiKey}:`).toString('base64')}`;
+}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,22 +16,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: vendor } = await supabaseAdmin.from('vendors').select('id').eq('user_id', user.id).single();
   if (!vendor) return err('Vendor profile required', 403);
 
-  const { data: orderItem } = await supabaseAdmin.from('order_items').select('order_id').eq('order_id', id).eq('vendor_id', vendor.id).maybeSingle();
+  const { data: orderItem } = await supabaseAdmin
+    .from('order_items')
+    .select('order_id')
+    .eq('order_id', id)
+    .eq('vendor_id', vendor.id)
+    .maybeSingle();
   if (!orderItem) return err('Forbidden', 403);
 
   const body = await req.json().catch(() => ({}));
-  const { shipmentId, rateId, carrierCost } = body as { shipmentId: string; rateId: string; carrierCost: number };
+  const { shipmentId, rateId } = body as { shipmentId: string; rateId: string };
   if (!shipmentId || !rateId) return err('shipmentId and rateId required');
 
-  const apiKey = process.env.EASYPOST_API_KEY;
-  if (!apiKey) return err('Shipping service not configured', 503);
+  let authHeader: string;
+  try {
+    authHeader = getEasyPostAuthHeader();
+  } catch (error) {
+    return err(error instanceof Error ? error.message : 'Shipping service not configured', 503);
+  }
 
-  // Buy the rate
   const buyRes = await fetch(`https://api.easypost.com/v2/shipments/${shipmentId}/buy`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
+      Authorization: authHeader,
     },
     body: JSON.stringify({ rate: { id: rateId } }),
   });
@@ -40,23 +53,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const trackingCode = shipData.tracking_code as string;
   const labelUrl = shipData.postage_label?.label_url as string;
   const carrier = shipData.selected_rate?.carrier as string;
-  const totalCharged = Math.round((Number(carrierCost) + MARKUP) * 100) / 100;
+  const actualCarrierCost = Number(shipData.selected_rate?.rate || 0);
 
-  // Save shipment record
-  const { data: shipment, error: shipErr } = await supabaseAdmin.from('shipments').insert({
-    order_id: id,
-    vendor_id: vendor.id,
-    status: 'label_purchased',
-    shippo: {
-      carrier,
-      trackingNumber: trackingCode,
-      labelUrl,
-      easypostShipmentId: shipmentId,
-      easypostRateId: rateId,
-      carrierCost: Number(carrierCost),
-      totalCharged,
-    },
-  }).select().single();
+  const { data: order } = await supabaseAdmin.from('orders').select('shipping_address').eq('id', id).single();
+  const savedQuote = getVendorQuoteFromShippingAddress(order?.shipping_address as Record<string, unknown> | undefined, vendor.id);
+  const totalCharged = savedQuote?.priceCharged ?? Math.round((actualCarrierCost + LABEL_MARKUP) * 100) / 100;
+  const markupCaptured = Math.round((totalCharged - actualCarrierCost) * 100) / 100;
+
+  const { data: shipment, error: shipErr } = await supabaseAdmin
+    .from('shipments')
+    .insert({
+      order_id: id,
+      vendor_id: vendor.id,
+      status: 'label_purchased',
+      shippo: {
+        carrier,
+        trackingNumber: trackingCode,
+        labelUrl,
+        easypostShipmentId: shipmentId,
+        easypostRateId: rateId,
+        carrierCost: actualCarrierCost,
+        totalCharged,
+        markupCaptured,
+      },
+    })
+    .select()
+    .single();
 
   if (shipErr) return err(shipErr.message, 500);
 

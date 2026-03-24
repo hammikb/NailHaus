@@ -1,4 +1,4 @@
-import { AdminOrder, AdminProduct, AdminStats, AdminUser, AdminVendorRow, AuthResponse, ImportResult, Order, PayoutSummary, Product, ShippingRate, User, VendorDashboard, VendorDetail, VendorSummary, VerificationRequest } from './types';
+import { AdminOrder, AdminProduct, AdminStats, AdminUser, AdminVendorRow, AuthResponse, CheckoutShippingQuote, ImportResult, Order, PayoutSummary, Product, ShippingRate, User, VendorDashboard, VendorDetail, VendorSummary, VerificationRequest } from './types';
 
 const TOKEN_KEY = 'nh_tok';
 const USER_KEY = 'nh_usr';
@@ -138,8 +138,21 @@ export const api = {
   checkout(items: { productId: string; qty: number; size?: string }[], shippingAddress: Record<string, string> = {}) {
     return request<Order>('/orders', { method: 'POST', body: JSON.stringify({ items, shippingAddress }) });
   },
-  createStripeSession(items: { productId: string; qty: number; size?: string }[]) {
-    return request<{ url: string }>('/checkout/stripe', { method: 'POST', body: JSON.stringify({ items }) });
+  quoteCheckoutShipping(items: { productId: string; qty: number; size?: string }[], shippingAddress: Record<string, string>) {
+    return request<{ shippingAddress: Record<string, string>; quote: CheckoutShippingQuote }>('/checkout/shipping', {
+      method: 'POST',
+      body: JSON.stringify({ items, shippingAddress }),
+    });
+  },
+  createStripeSession(
+    items: { productId: string; qty: number; size?: string }[],
+    shippingAddress: Record<string, string>,
+    promoCode?: string
+  ) {
+    return request<{ url: string; shippingQuote: CheckoutShippingQuote }>('/checkout/stripe', {
+      method: 'POST',
+      body: JSON.stringify({ items, shippingAddress, promoCode }),
+    });
   },
   // Admin
   getAdminStats() {
@@ -196,7 +209,7 @@ export const api = {
   getShippingRates(orderId: string) {
     return request<{ shipmentId: string; rates: ShippingRate[] }>(`/orders/${orderId}/shipping-rates`);
   },
-  purchaseLabel(orderId: string, data: { shipmentId: string; rateId: string; carrierCost: number }) {
+  purchaseLabel(orderId: string, data: { shipmentId: string; rateId: string }) {
     return request<{ shipmentId: string; trackingNumber: string; labelUrl: string; carrier: string; totalCharged: number }>(`/orders/${orderId}/purchase-label`, { method: 'POST', body: JSON.stringify(data) });
   },
 };

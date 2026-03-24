@@ -97,6 +97,32 @@ export interface ShippingRate {
   deliveryDate: string | null;
 }
 
+export interface CheckoutShippingVendorQuote {
+  vendorId: string;
+  vendorName: string;
+  totalQty: number;
+  parcelPreset: string;
+  parcel: {
+    length: number;
+    width: number;
+    height: number;
+    weight: number;
+  };
+  carrier: string;
+  service: string;
+  carrierCost: number;
+  priceCharged: number;
+  deliveryDays: number | null;
+  deliveryDate: string | null;
+}
+
+export interface CheckoutShippingQuote {
+  totalCarrierCost: number;
+  totalPriceCharged: number;
+  labelCount: number;
+  vendors: CheckoutShippingVendorQuote[];
+}
+
 export interface VendorDetail extends VendorSummary {
   description?: string;
   socialLinks?: Record<string, string>;

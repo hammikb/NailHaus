@@ -1,50 +1,84 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/components/CartProvider';
 import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
+import { CheckoutShippingQuote } from '@/lib/types';
+
+type ShippingForm = {
+  name: string;
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+};
+
+const EMPTY_SHIPPING_FORM: ShippingForm = {
+  name: '',
+  line1: '',
+  line2: '',
+  city: '',
+  state: '',
+  postal_code: '',
+  country: 'US',
+};
 
 export default function CartPage() {
-  const { items, count, total, removeItem, updateQty, clear } = useCart();
+  const { items, count, total, removeItem, updateQty } = useCart();
   const { user } = useAuth();
-  const router = useRouter();
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [promoInput, setPromoInput] = useState('');
-  const [promoLoading, setPromoLoading] = useState(false);
-  const [promoError, setPromoError] = useState('');
-  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number; type: string; value: number } | null>(null);
+  const [shippingForm, setShippingForm] = useState<ShippingForm>(EMPTY_SHIPPING_FORM);
+  const [shippingQuote, setShippingQuote] = useState<CheckoutShippingQuote | null>(null);
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [shippingError, setShippingError] = useState('');
 
-  const discountedTotal = appliedPromo ? Math.max(0, total - appliedPromo.discount) : total;
+  const grandTotal = total + (shippingQuote?.totalPriceCharged || 0);
 
-  async function applyPromo() {
-    if (!promoInput.trim()) return;
-    setPromoLoading(true);
-    setPromoError('');
+  function updateShippingField(field: keyof ShippingForm, value: string) {
+    setShippingForm((current) => ({ ...current, [field]: value }));
+    setShippingQuote(null);
+    setShippingError('');
+    setError('');
+  }
+
+  async function calculateShipping() {
+    if (!items.length) return;
+    setShippingLoading(true);
+    setShippingError('');
+    setError('');
     try {
-      const res = await fetch(`/api/discount-codes/validate?code=${encodeURIComponent(promoInput)}&total=${total}`);
-      const data = await res.json();
-      if (!res.ok) { setPromoError(data.error || 'Invalid code'); return; }
-      setAppliedPromo({ code: data.code, discount: data.discount, type: data.type, value: data.value });
-      setPromoInput('');
-    } catch {
-      setPromoError('Could not apply code. Please try again.');
+      const response = await api.quoteCheckoutShipping(
+        items.map((item) => ({ productId: item.productId, qty: item.qty, size: item.size })),
+        shippingForm
+      );
+      setShippingForm((current) => ({ ...current, ...(response.shippingAddress as ShippingForm) }));
+      setShippingQuote(response.quote);
+    } catch (e) {
+      setShippingQuote(null);
+      setShippingError(e instanceof Error ? e.message : 'Could not calculate shipping.');
     } finally {
-      setPromoLoading(false);
+      setShippingLoading(false);
     }
   }
 
   async function handleCheckout() {
     if (!items.length) return;
+    if (!shippingQuote) {
+      setError('Calculate shipping before checkout.');
+      return;
+    }
+
     setPlacing(true);
     setError('');
     try {
       const { url } = await api.createStripeSession(
-        items.map((item) => ({ productId: item.productId, qty: item.qty, size: item.size }))
+        items.map((item) => ({ productId: item.productId, qty: item.qty, size: item.size })),
+        shippingForm
       );
       if (url) window.location.href = url;
     } catch (e) {
@@ -85,7 +119,6 @@ export default function CartPage() {
           <div className="two-col" style={{ gap: 28, alignItems: 'start' }}>
             <div className="list">
               {(() => {
-                // Group items by vendor
                 const groups = items.reduce<Record<string, { vendorName: string; vendorId: string; items: typeof items }>>((acc, item) => {
                   const key = item.vendorId || 'unknown';
                   if (!acc[key]) acc[key] = { vendorName: item.vendorName || 'Indie Artist', vendorId: item.vendorId, items: [] };
@@ -99,8 +132,11 @@ export default function CartPage() {
                   <div key={group.vendorId}>
                     {isMultiVendor && (
                       <div style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        padding: '8px 4px', marginBottom: 8,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '8px 4px',
+                        marginBottom: 8,
                         borderBottom: '1px solid var(--border)',
                       }}>
                         <span style={{ fontSize: '.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)' }}>
@@ -200,63 +236,78 @@ export default function CartPage() {
 
               <hr className="divider" />
 
-              {/* Promo code */}
-              {!appliedPromo ? (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                      type="text"
-                      placeholder="Promo code"
-                      value={promoInput}
-                      onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoError(''); }}
-                      onKeyDown={e => e.key === 'Enter' && applyPromo()}
-                      style={{ flex: 1, padding: '8px 12px', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: '.85rem', minWidth: 0 }}
-                    />
-                    <button
-                      onClick={applyPromo}
-                      disabled={promoLoading || !promoInput.trim()}
-                      className="pill btn-ghost btn-sm"
-                      style={{ flexShrink: 0 }}
-                    >
-                      {promoLoading ? '…' : 'Apply'}
-                    </button>
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: '.74rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', marginBottom: 10 }}>
+                  Shipping address
+                </div>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <input className="input" placeholder="Full name" value={shippingForm.name} onChange={(e) => updateShippingField('name', e.target.value)} />
+                  <input className="input" placeholder="Street address" value={shippingForm.line1} onChange={(e) => updateShippingField('line1', e.target.value)} />
+                  <input className="input" placeholder="Apt / suite (optional)" value={shippingForm.line2} onChange={(e) => updateShippingField('line2', e.target.value)} />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 10 }}>
+                    <input className="input" placeholder="City" value={shippingForm.city} onChange={(e) => updateShippingField('city', e.target.value)} />
+                    <input className="input" placeholder="State" value={shippingForm.state} onChange={(e) => updateShippingField('state', e.target.value)} maxLength={3} />
                   </div>
-                  {promoError && <p style={{ fontSize: '.78rem', color: 'var(--danger)', margin: '6px 0 0' }}>{promoError}</p>}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 10 }}>
+                    <input className="input" placeholder="ZIP code" value={shippingForm.postal_code} onChange={(e) => updateShippingField('postal_code', e.target.value)} />
+                    <select className="input" value={shippingForm.country} onChange={(e) => updateShippingField('country', e.target.value)}>
+                      <option value="US">US</option>
+                      <option value="CA">CA</option>
+                      <option value="GB">UK</option>
+                      <option value="AU">AU</option>
+                    </select>
+                  </div>
+                  <button
+                    className="pill btn-ghost btn-sm"
+                    style={{ justifyContent: 'center' }}
+                    onClick={calculateShipping}
+                    disabled={shippingLoading || !items.length}
+                  >
+                    {shippingLoading ? 'Calculating shipping…' : 'Calculate shipping'}
+                  </button>
                 </div>
-              ) : (
-                <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--success-bg)', borderRadius: 12, border: '1px solid #86efac', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--success)' }}>
-                    🏷️ {appliedPromo.code} — {appliedPromo.type === 'percent' ? `${appliedPromo.value}% off` : `$${appliedPromo.value} off`}
-                  </span>
-                  <button onClick={() => setAppliedPromo(null)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.8rem' }}>✕</button>
-                </div>
-              )}
+                {shippingError && <p style={{ fontSize: '.78rem', color: 'var(--danger)', margin: '8px 0 0' }}>{shippingError}</p>}
+                {shippingQuote && (
+                  <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>Standard shipping selected</div>
+                    <div className="muted" style={{ fontSize: '.8rem', lineHeight: 1.5 }}>
+                      {shippingQuote.vendors.map((quote) => (
+                        <div key={quote.vendorId}>
+                          {quote.vendorName}: {quote.carrier} {quote.service} · ${quote.priceCharged.toFixed(2)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span className="muted" style={{ fontSize: '.9rem' }}>Subtotal</span>
                 <span style={{ fontWeight: 600 }}>${total.toFixed(2)}</span>
               </div>
-              {appliedPromo && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontSize: '.9rem', color: 'var(--success)' }}>Discount</span>
-                  <span style={{ fontWeight: 600, color: 'var(--success)' }}>−${appliedPromo.discount.toFixed(2)}</span>
-                </div>
-              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span className="muted" style={{ fontSize: '.9rem' }}>Shipping</span>
+                <span style={{ fontWeight: 600 }}>
+                  {shippingQuote ? `$${shippingQuote.totalPriceCharged.toFixed(2)}` : 'Calculate first'}
+                </span>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <span className="muted" style={{ fontSize: '.9rem' }}>Total</span>
-                <span style={{ fontWeight: 800, fontSize: '1.2rem' }}>${discountedTotal.toFixed(2)}</span>
+                <span style={{ fontWeight: 800, fontSize: '1.2rem' }}>${grandTotal.toFixed(2)}</span>
               </div>
-              <p className="muted" style={{ fontSize: '.78rem', margin: '0 0 20px' }}>Shipping calculated by vendor</p>
+              <p className="muted" style={{ fontSize: '.78rem', margin: '0 0 20px' }}>
+                Shipping is collected from the buyer now so each vendor can generate their own label later.
+              </p>
 
               {error && <div className="error" style={{ marginBottom: 14 }}>{error}</div>}
 
               <button
                 className="pill btn-primary"
                 style={{ width: '100%', justifyContent: 'center', fontSize: '1rem', padding: 14 }}
-                disabled={placing || !items.length}
+                disabled={placing || !items.length || !shippingQuote}
                 onClick={handleCheckout}
               >
-                {placing ? 'Redirecting to checkout…' : `Checkout · $${discountedTotal.toFixed(2)}`}
+                {placing ? 'Redirecting to checkout…' : `Checkout · $${grandTotal.toFixed(2)}`}
               </button>
 
               {!user && (
@@ -270,17 +321,6 @@ export default function CartPage() {
               <Link href="/shop" className="pill btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}>
                 Continue shopping
               </Link>
-
-              <div className="trust-grid" style={{ gridTemplateColumns: '1fr', gap: 8, marginTop: 20 }}>
-                <div className="trust-card" style={{ padding: '10px 14px' }}>
-                  <span className="trust-icon" style={{ fontSize: '1.2rem' }}>✅</span>
-                  <div><div className="trust-title" style={{ fontSize: '.8rem' }}>Verified sellers</div></div>
-                </div>
-                <div className="trust-card" style={{ padding: '10px 14px' }}>
-                  <span className="trust-icon" style={{ fontSize: '1.2rem' }}>🔒</span>
-                  <div><div className="trust-title" style={{ fontSize: '.8rem' }}>Secure checkout</div></div>
-                </div>
-              </div>
             </div>
           </div>
         )}

@@ -626,7 +626,7 @@ export function VendorDashboardClient() {
     setBuyingLabel(true);
     setShippingError('');
     try {
-      const result = await api.purchaseLabel(shippingOrderId, { shipmentId: shippingShipmentId, rateId: selectedRate.rateId, carrierCost: selectedRate.carrierCost });
+      const result = await api.purchaseLabel(shippingOrderId, { shipmentId: shippingShipmentId, rateId: selectedRate.rateId });
       setLabelResult({ orderId: shippingOrderId, trackingNumber: result.trackingNumber, labelUrl: result.labelUrl, carrier: result.carrier });
       setShippingOrderId(null);
       setShippingRates([]);

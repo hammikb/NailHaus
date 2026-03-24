@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, getAuthUser, err } from '@/lib/route-helpers';
-
-const MARKUP = 1.00; // $1 over carrier cost
-
-function getEasyPost() {
-  const apiKey = process.env.EASYPOST_API_KEY;
-  if (!apiKey) throw new Error('EASYPOST_API_KEY not configured');
-  return apiKey;
-}
+import { createEasyPostShipment, getPressOnNailParcel, getVendorQuoteFromShippingAddress } from '@/lib/shipping';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await getAuthUser(req);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: vendor } = await supabaseAdmin.from('vendors').select('id, ship_from_address').eq('user_id', user.id).single();
+  const { data: vendor } = await supabaseAdmin
+    .from('vendors')
+    .select('id, ship_from_address')
+    .eq('user_id', user.id)
+    .single();
   if (!vendor) return err('Vendor profile required', 403);
 
   const fromAddress = vendor.ship_from_address as Record<string, string> | null;
@@ -22,79 +19,67 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return err('Please set your ship-from address in your vendor profile first.', 422);
   }
 
-  // Verify vendor has items in this order
-  const { data: orderItem } = await supabaseAdmin.from('order_items').select('order_id').eq('order_id', id).eq('vendor_id', vendor.id).maybeSingle();
-  if (!orderItem) return err('Forbidden', 403);
+  const { data: orderItems } = await supabaseAdmin
+    .from('order_items')
+    .select('order_id, qty')
+    .eq('order_id', id)
+    .eq('vendor_id', vendor.id);
+  if (!orderItems?.length) return err('Forbidden', 403);
 
   const { data: order } = await supabaseAdmin.from('orders').select('shipping_address').eq('id', id).single();
   if (!order) return err('Order not found', 404);
 
   const toAddr = order.shipping_address as Record<string, string>;
-  if (!toAddr?.line1 || !toAddr?.city) return err('Order is missing a shipping address', 422);
-
-  let apiKey: string;
-  try { apiKey = getEasyPost(); } catch {
-    return err('Shipping rate service not configured. Please contact support.', 503);
+  if (!toAddr?.line1 || !toAddr?.city || !(toAddr?.postal_code || toAddr?.zip)) {
+    return err('Order is missing a shipping address', 422);
   }
 
-  // Create EasyPost shipment to get rates
-  const epRes = await fetch('https://api.easypost.com/v2/shipments', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
-    },
-    body: JSON.stringify({
-      shipment: {
-        from_address: {
-          name: fromAddress.name || 'Vendor',
-          street1: fromAddress.street1,
-          street2: fromAddress.street2 || '',
-          city: fromAddress.city,
-          state: fromAddress.state,
-          zip: fromAddress.zip,
-          country: fromAddress.country || 'US',
-        },
-        to_address: {
-          name: toAddr.name || 'Customer',
-          street1: toAddr.line1,
-          street2: toAddr.line2 || '',
-          city: toAddr.city,
-          state: toAddr.state || '',
-          zip: toAddr.postal_code || '',
-          country: toAddr.country || 'US',
-        },
-        parcel: {
-          length: 9,
-          width: 6,
-          height: 2,
-          weight: 6, // oz — adjust as needed
-        },
+  const savedQuote = getVendorQuoteFromShippingAddress(order.shipping_address as Record<string, unknown>, vendor.id);
+  const totalQty = orderItems.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+  const preset = savedQuote
+    ? {
+        id: savedQuote.parcelPreset as ReturnType<typeof getPressOnNailParcel>['id'],
+        label: savedQuote.parcelPreset,
+        length: Number(savedQuote.parcel.length),
+        width: Number(savedQuote.parcel.width),
+        height: Number(savedQuote.parcel.height),
+        weightOz: Number(savedQuote.parcel.weight),
+      }
+    : getPressOnNailParcel(totalQty || 1);
+
+  try {
+    const shipment = await createEasyPostShipment({
+      fromAddress,
+      toAddress: {
+        name: toAddr.name || 'Customer',
+        line1: toAddr.line1,
+        line2: toAddr.line2 || '',
+        city: toAddr.city,
+        state: toAddr.state || '',
+        postal_code: toAddr.postal_code || toAddr.zip || '',
+        country: toAddr.country || 'US',
       },
-    }),
-  });
+      parcel: preset,
+    });
 
-  if (!epRes.ok) {
-    const epErr = await epRes.json().catch(() => ({}));
-    return err(epErr?.error?.message || 'Could not get shipping rates', 502);
+    const shipmentId = (shipment as { id?: string }).id as string;
+    const rates = (((shipment as { rates?: Array<Record<string, unknown>> }).rates) || [])
+      .filter((rate) => rate.rate)
+      .map((rate) => ({
+        rateId: rate.id as string,
+        carrier: rate.carrier as string,
+        service: rate.service as string,
+        carrierCost: Number(rate.rate),
+        price: Math.round((Number(rate.rate) + 1) * 100) / 100,
+        deliveryDays: (rate.delivery_days as number | null) ?? null,
+        deliveryDate: (rate.delivery_date as string | null) ?? null,
+      }))
+      .sort((a, b) => a.price - b.price);
+
+    return NextResponse.json({ shipmentId, rates });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not get shipping rates';
+    const status = message.includes('EASYPOST_API_KEY') ? 503 : 502;
+    return err(status === 503 ? 'Shipping rate service not configured. Please contact support.' : message, status);
   }
-
-  const epData = await epRes.json();
-  const shipmentId = epData.id as string;
-  const rates = (epData.rates as Array<Record<string, unknown>>) || [];
-
-  const formatted = rates
-    .filter(r => r.rate)
-    .map(r => ({
-      rateId: r.id as string,
-      carrier: r.carrier as string,
-      service: r.service as string,
-      carrierCost: Number(r.rate),
-      price: Math.round((Number(r.rate) + MARKUP) * 100) / 100,
-      deliveryDays: r.delivery_days as number | null,
-      deliveryDate: r.delivery_date as string | null,
-    }))
-    .sort((a, b) => a.price - b.price);
-
-  return NextResponse.json({ shipmentId, rates: formatted });
 }

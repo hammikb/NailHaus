@@ -28,20 +28,42 @@ export async function POST(req: NextRequest) {
     const orderId = session.metadata?.orderId;
     if (!orderId) return NextResponse.json({ received: true });
 
+    const { data: existingOrder } = await supabaseAdmin
+      .from('orders')
+      .select('shipping_address')
+      .eq('id', orderId)
+      .single();
+
     // Mark order as confirmed and store shipping address
     const sessionAny = session as unknown as Record<string, unknown>;
-    const shipping = (sessionAny.shipping_details || sessionAny.customer_details) as { name?: string; address?: { line1?: string; line2?: string; city?: string; postal_code?: string; country?: string } } | null;
+    const shipping = (sessionAny.shipping_details || sessionAny.customer_details) as {
+      name?: string;
+      address?: {
+        line1?: string;
+        line2?: string;
+        city?: string;
+        state?: string;
+        postal_code?: string;
+        country?: string;
+      };
+    } | null;
+    const preservedShippingAddress =
+      existingOrder?.shipping_address && typeof existingOrder.shipping_address === 'object'
+        ? (existingOrder.shipping_address as Record<string, unknown>)
+        : {};
     await supabaseAdmin.from('orders').update({
       status: 'confirmed',
       stripe_payment_intent: session.payment_intent as string,
       shipping_address: shipping ? {
-        name: shipping.name,
-        line1: shipping.address?.line1,
-        line2: shipping.address?.line2,
-        city: shipping.address?.city,
-        state: shipping.address?.postal_code,
-        country: shipping.address?.country,
-      } : {},
+        ...preservedShippingAddress,
+        name: shipping.name || preservedShippingAddress.name,
+        line1: shipping.address?.line1 || preservedShippingAddress.line1,
+        line2: shipping.address?.line2 || preservedShippingAddress.line2,
+        city: shipping.address?.city || preservedShippingAddress.city,
+        state: shipping.address?.state || preservedShippingAddress.state,
+        postal_code: shipping.address?.postal_code || preservedShippingAddress.postal_code || preservedShippingAddress.zip,
+        country: shipping.address?.country || preservedShippingAddress.country,
+      } : preservedShippingAddress,
     }).eq('id', orderId);
 
     // Increment vendor sales counts and collect items for emails
