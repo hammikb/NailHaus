@@ -1,31 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCart } from '@/components/CartProvider';
 import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
+import { EMPTY_SAVED_SHIPPING_ADDRESS, clearSavedShippingAddress, hasAddressValue, readSavedShippingAddress, sameShippingAddress, saveShippingAddress, type SavedShippingAddress } from '@/lib/buyer-preferences';
 import { CheckoutShippingQuote } from '@/lib/types';
 
-type ShippingForm = {
-  name: string;
-  line1: string;
-  line2: string;
-  city: string;
-  state: string;
-  postal_code: string;
-  country: string;
-};
-
-const EMPTY_SHIPPING_FORM: ShippingForm = {
-  name: '',
-  line1: '',
-  line2: '',
-  city: '',
-  state: '',
-  postal_code: '',
-  country: 'US',
-};
+type ShippingForm = SavedShippingAddress;
+const EMPTY_SHIPPING_FORM: ShippingForm = EMPTY_SAVED_SHIPPING_ADDRESS;
 
 export default function CartPage() {
   const { items, count, total, removeItem, updateQty } = useCart();
@@ -36,14 +20,49 @@ export default function CartPage() {
   const [shippingQuote, setShippingQuote] = useState<CheckoutShippingQuote | null>(null);
   const [shippingLoading, setShippingLoading] = useState(false);
   const [shippingError, setShippingError] = useState('');
+  const [savedShippingAddress, setSavedShippingAddress] = useState<ShippingForm | null>(null);
+  const [shippingSaved, setShippingSaved] = useState(false);
 
   const grandTotal = total + (shippingQuote?.totalPriceCharged || 0);
+
+  useEffect(() => {
+    const saved = readSavedShippingAddress();
+    if (!saved) return;
+    setSavedShippingAddress(saved);
+    setShippingForm((current) => (
+      hasAddressValue(current) ? current : saved
+    ));
+  }, []);
 
   function updateShippingField(field: keyof ShippingForm, value: string) {
     setShippingForm((current) => ({ ...current, [field]: value }));
     setShippingQuote(null);
     setShippingError('');
     setError('');
+    setShippingSaved(false);
+  }
+
+  function handleSaveShippingAddress() {
+    saveShippingAddress(shippingForm);
+    setSavedShippingAddress(shippingForm);
+    setShippingSaved(true);
+    window.setTimeout(() => setShippingSaved(false), 2200);
+  }
+
+  function handleUseSavedAddress() {
+    const saved = readSavedShippingAddress();
+    if (!saved) return;
+    setSavedShippingAddress(saved);
+    setShippingForm(saved);
+    setShippingQuote(null);
+    setShippingError('');
+    setError('');
+  }
+
+  function handleClearSavedAddress() {
+    clearSavedShippingAddress();
+    setSavedShippingAddress(null);
+    setShippingSaved(false);
   }
 
   async function calculateShipping() {
@@ -241,6 +260,15 @@ export default function CartPage() {
                   Shipping address
                 </div>
                 <div style={{ display: 'grid', gap: 10 }}>
+                  {savedShippingAddress && !sameShippingAddress(savedShippingAddress, shippingForm) && (
+                    <button
+                      className="pill btn-ghost btn-sm"
+                      style={{ justifyContent: 'center' }}
+                      onClick={handleUseSavedAddress}
+                    >
+                      Use saved address
+                    </button>
+                  )}
                   <input className="input" placeholder="Full name" value={shippingForm.name} onChange={(e) => updateShippingField('name', e.target.value)} />
                   <input className="input" placeholder="Street address" value={shippingForm.line1} onChange={(e) => updateShippingField('line1', e.target.value)} />
                   <input className="input" placeholder="Apt / suite (optional)" value={shippingForm.line2} onChange={(e) => updateShippingField('line2', e.target.value)} />
@@ -265,8 +293,31 @@ export default function CartPage() {
                   >
                     {shippingLoading ? 'Calculating shipping…' : 'Calculate shipping'}
                   </button>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      className="pill btn-ghost btn-sm"
+                      style={{ justifyContent: 'center' }}
+                      onClick={handleSaveShippingAddress}
+                    >
+                      {shippingSaved ? 'Saved' : 'Save as default'}
+                    </button>
+                    {savedShippingAddress && (
+                      <button
+                        className="pill btn-ghost btn-sm"
+                        style={{ justifyContent: 'center' }}
+                        onClick={handleClearSavedAddress}
+                      >
+                        Clear saved
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {shippingError && <p style={{ fontSize: '.78rem', color: 'var(--danger)', margin: '8px 0 0' }}>{shippingError}</p>}
+                {!shippingError && savedShippingAddress && (
+                  <p className="muted" style={{ fontSize: '.76rem', margin: '8px 0 0' }}>
+                    Default address is saved on this device for faster checkout.
+                  </p>
+                )}
                 {shippingQuote && (
                   <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                     <div style={{ fontWeight: 700, marginBottom: 6 }}>Standard shipping selected</div>

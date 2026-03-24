@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthProvider';
+import { useCart } from '@/components/CartProvider';
 import { api } from '@/lib/api';
 import { Order } from '@/lib/types';
 
@@ -16,9 +17,12 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }
 
 export default function OrdersPage() {
   const { user, loading } = useAuth();
+  const { addItem } = useCart();
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [fetching, setFetching] = useState(true);
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
+  const [reorderedId, setReorderedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) { router.push('/login'); return; }
@@ -29,6 +33,36 @@ export default function OrdersPage() {
         .finally(() => setFetching(false));
     }
   }, [user, loading, router]);
+
+  function reorderOrder(order: Order) {
+    const items = order.order_items || [];
+    if (!items.length) return;
+
+    setReorderingId(order.id);
+
+    for (const item of items) {
+      const cartItem = {
+        productId: item.productId,
+        name: item.products?.name || 'Product',
+        price: Number(item.price),
+        emoji: item.products?.emoji || '💅',
+        bgColor: item.products?.bg_color || '#fde8e8',
+        vendorId: item.vendorId,
+        vendorName: item.vendors?.name,
+        size: item.size,
+      };
+
+      for (let i = 0; i < Math.max(1, Number(item.qty) || 1); i += 1) {
+        addItem(cartItem);
+      }
+    }
+
+    setReorderedId(order.id);
+    setReorderingId(null);
+    window.setTimeout(() => {
+      setReorderedId((current) => (current === order.id ? null : current));
+    }, 2200);
+  }
 
   if (loading || fetching) {
     return (
@@ -84,6 +118,19 @@ export default function OrdersPage() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      {items.length > 0 && (
+                        <button
+                          className="pill btn-ghost btn-sm"
+                          onClick={() => reorderOrder(order)}
+                          disabled={reorderingId === order.id}
+                        >
+                          {reorderingId === order.id
+                            ? 'Reordering...'
+                            : reorderedId === order.id
+                              ? 'Added to cart'
+                              : 'Reorder'}
+                        </button>
+                      )}
                       <span className="chip" style={{ background: statusInfo.bg, color: statusInfo.color, borderColor: 'transparent' }}>
                         {statusInfo.label}
                       </span>
@@ -104,7 +151,7 @@ export default function OrdersPage() {
                           <div>
                             <div style={{ fontWeight: 700, fontSize: '.85rem' }}>{item.products?.name || 'Product'}</div>
                             <div className="muted" style={{ fontSize: '.74rem' }}>
-                              {item.vendors?.name || ''} · Qty {item.qty} · ${Number(item.price).toFixed(2)} ea.
+                              {item.vendors?.name || ''}{item.size ? ` · ${item.size}` : ''} · Qty {item.qty} · ${Number(item.price).toFixed(2)} ea.
                             </div>
                           </div>
                         </div>

@@ -163,6 +163,7 @@ export interface OrderItem {
   vendorId: string;
   qty: number;
   price: number;
+  size?: string;
   products?: { id: string; name: string; emoji: string; bg_color: string } | null;
   vendors?: { id: string; name: string; emoji: string; bg_color: string } | null;
 }
