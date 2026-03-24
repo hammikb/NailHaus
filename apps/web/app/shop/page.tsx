@@ -16,6 +16,13 @@ const SORTS = [
   { value: 'price_asc', label: 'Price ↑' },
   { value: 'price_desc', label: 'Price ↓' },
 ];
+const VIEW_OPTIONS = [
+  { value: 'small', label: 'Small', min: 190 },
+  { value: 'medium', label: 'Medium', min: 230 },
+  { value: 'large', label: 'Large', min: 280 },
+] as const;
+
+type ViewSize = typeof VIEW_OPTIONS[number]['value'];
 
 /* ─── Dropdown component ──────────────────────────────── */
 function FilterDropdown({
@@ -86,6 +93,10 @@ function ShopContent() {
   const [minPrice, setMinPrice] = useState(() => searchParams.get('minPrice') ?? '');
   const [maxPrice, setMaxPrice] = useState(() => searchParams.get('maxPrice') ?? '');
   const [sort, setSort] = useState(() => searchParams.get('sort') ?? 'popular');
+  const [view, setView] = useState<ViewSize>(() => {
+    const param = searchParams.get('view');
+    return VIEW_OPTIONS.some((option) => option.value === param) ? (param as ViewSize) : 'medium';
+  });
   const [openFilter, setOpenFilter] = useState<string | null>(null);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -105,11 +116,11 @@ function ShopContent() {
   }
 
   function pushParams(overrides: Record<string, string> = {}) {
-    const current = { search, shape, style, occasion, availability, sort, minPrice, maxPrice };
+    const current = { search, shape, style, occasion, availability, sort, minPrice, maxPrice, view };
     const merged = { ...current, ...overrides };
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(merged)) {
-      if (v && !(k === 'sort' && v === 'popular')) params.set(k, v);
+      if (v && !(k === 'sort' && v === 'popular') && !(k === 'view' && v === 'medium')) params.set(k, v);
     }
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
@@ -166,11 +177,14 @@ function ShopContent() {
     setShape(''); setStyle(''); setOccasion(''); setAvailability('');
     setSearch(''); setMinPrice(''); setMaxPrice('');
     load({ sort });
-    router.replace(pathname, { scroll: false });
+    pushParams({ search: '', shape: '', style: '', occasion: '', availability: '', minPrice: '', maxPrice: '' });
   }
 
   const activeCount = [shape, style, occasion, availability, minPrice, maxPrice].filter(Boolean).length;
   const sortLabel = SORTS.find(s => s.value === sort)?.label ?? 'Popular';
+  const viewLabel = VIEW_OPTIONS.find(option => option.value === view)?.label ?? 'Medium';
+  const gridMinWidth = VIEW_OPTIONS.find(option => option.value === view)?.min ?? 230;
+  const productGridStyle = { gridTemplateColumns: `repeat(auto-fill, minmax(${gridMinWidth}px, 1fr))` };
   const availLabel = availability === 'in_stock' ? 'In stock' : availability === 'made_to_order' ? 'MTO' : null;
   const priceActive = !!(minPrice || maxPrice);
   const priceLabel = priceActive
@@ -275,6 +289,27 @@ function ShopContent() {
             </div>
           </FilterDropdown>
 
+          <FilterDropdown name="view" label={`${viewLabel} view`} active={view !== 'medium'} open={openFilter === 'view'} onToggle={toggleDropdown}>
+            <div className="fdd-options" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+              {VIEW_OPTIONS.map(option => (
+                <button
+                  key={option.value}
+                  className={`fdd-option fdd-option-row${view === option.value ? ' active' : ''}`}
+                  onClick={() => {
+                    setView(option.value);
+                    pushParams({ view: option.value });
+                    setOpenFilter(null);
+                  }}
+                >
+                  {option.label}
+                  <span className="muted" style={{ marginLeft: 'auto', fontSize: '.72rem' }}>
+                    {option.min}px
+                  </span>
+                </button>
+              ))}
+            </div>
+          </FilterDropdown>
+
           {/* Clear */}
           {activeCount > 0 && (
             <button className="pill btn-ghost btn-sm" onClick={clearAll} style={{ flexShrink: 0 }}>
@@ -296,7 +331,7 @@ function ShopContent() {
 
         {/* Results */}
         {loading ? (
-          <div className="grid product-grid">
+          <div className="grid product-grid" style={productGridStyle}>
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="card" style={{ overflow: 'hidden' }}>
                 <div className="shimmer" style={{ height: 210 }} />
@@ -314,7 +349,7 @@ function ShopContent() {
             <p>No products match your filters. Try adjusting or clearing them.</p>
           </div>
         ) : (
-          <div className="grid product-grid fade-in">
+          <div className="grid product-grid fade-in" style={productGridStyle}>
             {products.map(product => <ProductCard key={product.id} product={product} />)}
           </div>
         )}
