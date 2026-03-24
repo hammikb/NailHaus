@@ -16,13 +16,19 @@ const SORTS = [
   { value: 'price_asc', label: 'Price ↑' },
   { value: 'price_desc', label: 'Price ↓' },
 ];
-const VIEW_OPTIONS = [
-  { value: 'small', label: 'Small', min: 190 },
-  { value: 'medium', label: 'Medium', min: 230 },
-  { value: 'large', label: 'Large', min: 280 },
-] as const;
+const MIN_VIEW_SIZE = 170;
+const MAX_VIEW_SIZE = 320;
+const DEFAULT_VIEW_SIZE = 230;
 
-type ViewSize = typeof VIEW_OPTIONS[number]['value'];
+function clampViewSize(value: number) {
+  return Math.min(MAX_VIEW_SIZE, Math.max(MIN_VIEW_SIZE, value));
+}
+
+function getViewSizeLabel(value: number) {
+  if (value <= 200) return 'Compact';
+  if (value >= 280) return 'Spacious';
+  return 'Balanced';
+}
 
 /* ─── Dropdown component ──────────────────────────────── */
 function FilterDropdown({
@@ -93,9 +99,9 @@ function ShopContent() {
   const [minPrice, setMinPrice] = useState(() => searchParams.get('minPrice') ?? '');
   const [maxPrice, setMaxPrice] = useState(() => searchParams.get('maxPrice') ?? '');
   const [sort, setSort] = useState(() => searchParams.get('sort') ?? 'popular');
-  const [view, setView] = useState<ViewSize>(() => {
-    const param = searchParams.get('view');
-    return VIEW_OPTIONS.some((option) => option.value === param) ? (param as ViewSize) : 'medium';
+  const [viewSize, setViewSize] = useState(() => {
+    const param = Number(searchParams.get('view'));
+    return Number.isFinite(param) ? clampViewSize(param) : DEFAULT_VIEW_SIZE;
   });
   const [openFilter, setOpenFilter] = useState<string | null>(null);
 
@@ -116,11 +122,11 @@ function ShopContent() {
   }
 
   function pushParams(overrides: Record<string, string> = {}) {
-    const current = { search, shape, style, occasion, availability, sort, minPrice, maxPrice, view };
+    const current = { search, shape, style, occasion, availability, sort, minPrice, maxPrice, view: String(viewSize) };
     const merged = { ...current, ...overrides };
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(merged)) {
-      if (v && !(k === 'sort' && v === 'popular') && !(k === 'view' && v === 'medium')) params.set(k, v);
+      if (v && !(k === 'sort' && v === 'popular') && !(k === 'view' && Number(v) === DEFAULT_VIEW_SIZE)) params.set(k, v);
     }
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
@@ -182,14 +188,19 @@ function ShopContent() {
 
   const activeCount = [shape, style, occasion, availability, minPrice, maxPrice].filter(Boolean).length;
   const sortLabel = SORTS.find(s => s.value === sort)?.label ?? 'Popular';
-  const viewLabel = VIEW_OPTIONS.find(option => option.value === view)?.label ?? 'Medium';
-  const gridMinWidth = VIEW_OPTIONS.find(option => option.value === view)?.min ?? 230;
-  const productGridStyle = { gridTemplateColumns: `repeat(auto-fill, minmax(${gridMinWidth}px, 1fr))` };
+  const viewLabel = getViewSizeLabel(viewSize);
+  const productGridStyle = { gridTemplateColumns: `repeat(auto-fill, minmax(${viewSize}px, 1fr))` };
   const availLabel = availability === 'in_stock' ? 'In stock' : availability === 'made_to_order' ? 'MTO' : null;
   const priceActive = !!(minPrice || maxPrice);
   const priceLabel = priceActive
     ? `$${minPrice || '0'} – ${maxPrice ? '$' + maxPrice : '∞'}`
     : 'Price';
+
+  function handleViewSizeChange(nextValue: number) {
+    const next = clampViewSize(nextValue);
+    setViewSize(next);
+    pushParams({ view: String(next) });
+  }
 
   return (
     <main className="page-shell">
@@ -289,27 +300,6 @@ function ShopContent() {
             </div>
           </FilterDropdown>
 
-          <FilterDropdown name="view" label={`${viewLabel} view`} active={view !== 'medium'} open={openFilter === 'view'} onToggle={toggleDropdown}>
-            <div className="fdd-options" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-              {VIEW_OPTIONS.map(option => (
-                <button
-                  key={option.value}
-                  className={`fdd-option fdd-option-row${view === option.value ? ' active' : ''}`}
-                  onClick={() => {
-                    setView(option.value);
-                    pushParams({ view: option.value });
-                    setOpenFilter(null);
-                  }}
-                >
-                  {option.label}
-                  <span className="muted" style={{ marginLeft: 'auto', fontSize: '.72rem' }}>
-                    {option.min}px
-                  </span>
-                </button>
-              ))}
-            </div>
-          </FilterDropdown>
-
           {/* Clear */}
           {activeCount > 0 && (
             <button className="pill btn-ghost btn-sm" onClick={clearAll} style={{ flexShrink: 0 }}>
@@ -328,6 +318,41 @@ function ShopContent() {
             {priceActive && <span className="active-chip">${minPrice || '0'} – {maxPrice ? '$' + maxPrice : '∞'} <button onClick={() => { setMinPrice(''); setMaxPrice(''); applyFilters({ minPrice: '', maxPrice: '' }); }}>✕</button></span>}
           </div>
         )}
+
+        <div
+          className="panel"
+          style={{
+            padding: '14px 18px',
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ minWidth: 120 }}>
+            <div style={{ fontWeight: 800, fontSize: '.9rem' }}>View size</div>
+            <div className="muted" style={{ fontSize: '.78rem' }}>{viewLabel} layout</div>
+          </div>
+          <span className="muted" style={{ fontSize: '.78rem' }}>Small</span>
+          <input
+            type="range"
+            min={MIN_VIEW_SIZE}
+            max={MAX_VIEW_SIZE}
+            step={10}
+            value={viewSize}
+            onChange={(e) => handleViewSizeChange(Number(e.target.value))}
+            aria-label="Adjust product grid size"
+            style={{ flex: '1 1 220px', accentColor: 'var(--accent)' }}
+          />
+          <span className="muted" style={{ fontSize: '.78rem' }}>Large</span>
+          <span
+            className="chip"
+            style={{ minWidth: 68, justifyContent: 'center', fontVariantNumeric: 'tabular-nums' }}
+          >
+            {viewSize}px
+          </span>
+        </div>
 
         {/* Results */}
         {loading ? (
