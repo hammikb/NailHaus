@@ -76,12 +76,6 @@ export function SignupForm() {
           Vendor
         </button>
       </div>
-      {role === 'vendor' && (
-        <p style={{ fontSize: '.85rem', color: 'var(--muted)', marginBottom: 16, textAlign: 'center' }}>
-          Vendor accounts let you list and sell your nail products.
-        </p>
-      )}
-
       {/* OAuth buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
         <button

@@ -74,8 +74,13 @@ export async function POST(req: NextRequest) {
   const user = await getAuthUser(req);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: vendor } = await supabaseAdmin.from('vendors').select('id').eq('user_id', user.id).single();
+  const { data: vendor } = await supabaseAdmin.from('vendors').select('id, verified').eq('user_id', user.id).single();
   if (!vendor) return err('Vendor profile required', 403);
+
+  if (!vendor.verified) {
+    const { count } = await supabaseAdmin.from('products').select('id', { count: 'exact', head: true }).eq('vendor_id', vendor.id);
+    if ((count ?? 0) >= 5) return err('Unverified vendors can list up to 5 products. Apply for verification to list more.', 403);
+  }
 
   const body = await req.json().catch(() => ({}));
   const { name, price, stock } = body;
