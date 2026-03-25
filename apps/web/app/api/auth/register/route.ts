@@ -26,6 +26,16 @@ export async function POST(req: NextRequest) {
 
   await supabaseAdmin.from('profiles').insert({ id: user.id, name, role });
 
+  if (role === 'vendor') {
+    await supabaseAdmin.from('vendors').insert({
+      user_id: user.id,
+      name,
+      emoji: '💅',
+      bg_color: '#fde8e8',
+      verified: false,
+    });
+  }
+
   // Sign in to get a token
   const { data: session, error: signInError } = await supabaseAuth.auth.signInWithPassword({ email, password });
   if (signInError || !session.session) return err('Registration succeeded but sign-in failed');
