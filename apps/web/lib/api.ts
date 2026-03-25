@@ -78,7 +78,7 @@ export const api = {
   login(payload: { email: string; password: string }) {
     return request<AuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
   },
-  register(payload: { name: string; email: string; password: string }) {
+  register(payload: { name: string; email: string; password: string; role?: string }) {
     return request<AuthResponse>('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
   },
   me() {

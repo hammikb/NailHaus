@@ -6,6 +6,7 @@ export async function POST(req: NextRequest) {
   const name = String(body.name || '').trim().slice(0, 80);
   const email = String(body.email || '').toLowerCase().trim();
   const password = String(body.password || '');
+  const role = body.role === 'vendor' ? 'vendor' : 'buyer';
 
   if (!name || !email || !password) return err('All fields are required');
   if (password.length < 6) return err('Password must be at least 6 characters');
@@ -23,14 +24,14 @@ export async function POST(req: NextRequest) {
 
   const user = data.user;
 
-  await supabaseAdmin.from('profiles').insert({ id: user.id, name, role: 'buyer' });
+  await supabaseAdmin.from('profiles').insert({ id: user.id, name, role });
 
   // Sign in to get a token
   const { data: session, error: signInError } = await supabaseAuth.auth.signInWithPassword({ email, password });
   if (signInError || !session.session) return err('Registration succeeded but sign-in failed');
 
   return NextResponse.json(
-    { token: session.session.access_token, user: { id: user.id, name, email, role: 'buyer' } },
+    { token: session.session.access_token, user: { id: user.id, name, email, role } },
     { status: 201 }
   );
 }

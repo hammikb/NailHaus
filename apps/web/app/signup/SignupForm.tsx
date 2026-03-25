@@ -12,6 +12,7 @@ export function SignupForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+  const [role, setRole] = useState<'buyer' | 'vendor'>('buyer');
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -24,9 +25,10 @@ export function SignupForm() {
         name: String(formData.get('name') || ''),
         email: String(formData.get('email') || ''),
         password: String(formData.get('password') || ''),
+        role,
       });
       signIn(auth);
-      router.push('/');
+      router.push(role === 'vendor' ? '/dashboard/vendor' : '/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed');
     } finally {
@@ -53,6 +55,33 @@ export function SignupForm() {
 
   return (
     <div>
+      {/* Account type toggle */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <button
+          type="button"
+          className={`pill${role === 'buyer' ? ' btn-primary' : ''}`}
+          style={{ flex: 1 }}
+          onClick={() => setRole('buyer')}
+          disabled={busy}
+        >
+          Buyer
+        </button>
+        <button
+          type="button"
+          className={`pill${role === 'vendor' ? ' btn-primary' : ''}`}
+          style={{ flex: 1 }}
+          onClick={() => setRole('vendor')}
+          disabled={busy}
+        >
+          Vendor
+        </button>
+      </div>
+      {role === 'vendor' && (
+        <p style={{ fontSize: '.85rem', color: 'var(--muted)', marginBottom: 16, textAlign: 'center' }}>
+          Vendor accounts let you list and sell your nail products.
+        </p>
+      )}
+
       {/* OAuth buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
         <button
