@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/route-helpers';
-import { sendOrderConfirmation, sendVendorNewOrderNotification } from '@/lib/email';
+import { sendOrderConfirmation, sendOrderCancelledNotification, sendVendorNewOrderNotification } from '@/lib/email';
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' });
@@ -51,9 +51,14 @@ export async function POST(req: NextRequest) {
       existingOrder?.shipping_address && typeof existingOrder.shipping_address === 'object'
         ? (existingOrder.shipping_address as Record<string, unknown>)
         : {};
+    // Use Stripe's final amount_total (includes tax if Stripe Tax is enabled)
+    const finalTotal = session.amount_total ? session.amount_total / 100 : null;
+    const taxTotal = session.total_details?.amount_tax ? session.total_details.amount_tax / 100 : 0;
+
     await supabaseAdmin.from('orders').update({
       status: 'confirmed',
       stripe_payment_intent: session.payment_intent as string,
+      ...(finalTotal !== null ? { total: finalTotal, tax_amount: taxTotal } : {}),
       shipping_address: shipping ? {
         ...preservedShippingAddress,
         name: shipping.name || preservedShippingAddress.name,
@@ -157,6 +162,22 @@ export async function POST(req: NextRequest) {
     const orderId = session.metadata?.orderId;
     if (orderId) {
       await supabaseAdmin.from('orders').update({ status: 'cancelled' }).eq('id', orderId);
+
+      // Notify the buyer their order was cancelled
+      let cancelEmail: string | null = null;
+      let cancelName = 'there';
+      const { data: cancelOrder } = await supabaseAdmin.from('orders').select('user_id').eq('id', orderId).single();
+      if (cancelOrder?.user_id) {
+        const { data: p } = await supabaseAdmin.from('profiles').select('name, email').eq('id', cancelOrder.user_id).single();
+        cancelEmail = p?.email ?? null;
+        cancelName = p?.name || 'there';
+      } else {
+        cancelEmail = session.customer_details?.email ?? session.customer_email ?? null;
+        cancelName = session.customer_details?.name ?? 'there';
+      }
+      if (cancelEmail) {
+        await sendOrderCancelledNotification({ to: cancelEmail, buyerName: cancelName, orderId });
+      }
     }
   }
 

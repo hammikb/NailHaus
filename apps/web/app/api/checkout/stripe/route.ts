@@ -154,6 +154,9 @@ export async function POST(req: NextRequest) {
     success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/cart`,
     billing_address_collection: 'auto',
+    // Stripe Automatic Tax — enable via STRIPE_TAX_ENABLED=true in env
+    // Requires Stripe Tax to be activated in your Stripe dashboard
+    ...(process.env.STRIPE_TAX_ENABLED === 'true' ? { automatic_tax: { enabled: true } } : {}),
     ...(singleConnectedVendor ? {
       payment_intent_data: {
         application_fee_amount: feeCents,
