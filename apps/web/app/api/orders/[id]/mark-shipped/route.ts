@@ -43,7 +43,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         trackingNumber: trackingNumber || undefined,
         carrier: carrier || undefined,
         items: (shippedItems || []).map((i) => ({
-          name: (i.products as { name: string } | null)?.name || 'Product',
+          name: (i.products as unknown as { name: string } | null)?.name || 'Product',
           qty: i.qty,
           size: (i as { size?: string }).size,
         })),
